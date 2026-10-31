@@ -1,0 +1,22 @@
+# ==============================================================================
+# Requirements for Audio Classification (4-Segment WKNN)
+# ==============================================================================
+
+# Web Application & UI
+streamlit
+plotly
+
+# Audio Processing & Real-Time Recording
+librosa
+sounddevice
+soundfile
+
+# Data Processing & Machine Learning
+numpy
+pandas
+scikit-learn
+joblib
+
+# Visualization & Notebook Analysis (train.ipynb)
+matplotlib
+seaborn

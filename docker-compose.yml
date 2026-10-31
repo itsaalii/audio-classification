@@ -1,0 +1,20 @@
+services:
+  acoustiknn-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: acoustiknn-studio
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - ALLOWED_ORIGINS=*
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
