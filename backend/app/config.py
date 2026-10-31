@@ -24,6 +24,12 @@ DURATION_SECONDS = 4.0
 SAMPLE_COUNT = int(SAMPLE_RATE * DURATION_SECONDS)  # 88,200 samples
 N_MFCC = 13
 
+# Ambang batas energi akustik (RMS Thresholds)
+# Nilai default hening/ambien dinaikkan ke 0.015 agar desis kipas laptop/ruangan tidak memicu deteksi bising
+DEFAULT_SILENCE_RMS = float(os.getenv("DEFAULT_SILENCE_RMS", "0.015"))
+# Batas saturasi keras (hanya untuk suara sangat keras / ekstrem, dinaikkan ke 0.220)
+EXTREME_NOISE_RMS = float(os.getenv("EXTREME_NOISE_RMS", "0.220"))
+
 FEATURE_COLUMNS = [
     'rms',
     'spectral_centroid',

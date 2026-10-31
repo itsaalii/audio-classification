@@ -14,7 +14,9 @@ from backend.app.config import (
     SAMPLE_RATE,
     DURATION_SECONDS,
     SAMPLE_COUNT,
-    FEATURE_COLUMNS
+    FEATURE_COLUMNS,
+    DEFAULT_SILENCE_RMS,
+    EXTREME_NOISE_RMS
 )
 from backend.app.schemas import PredictionResult, SegmentResult, FileAnalysisResult
 from backend.app.services.features import extract_features_vector, prepare_chunk_4s
@@ -48,7 +50,12 @@ class WKNNPredictor:
             # Non-fatal, just log
             print(f"Warmup notice: {e}")
 
-    def predict_chunk(self, audio_data: np.ndarray, baseline_rms: Optional[float] = None) -> PredictionResult:
+    def predict_chunk(
+        self,
+        audio_data: np.ndarray,
+        baseline_rms: Optional[float] = None,
+        is_live: bool = True
+    ) -> PredictionResult:
         t0 = time.perf_counter()
         now = time.time()
 
@@ -59,10 +66,19 @@ class WKNNPredictor:
         peak_amp = float(np.max(np.abs(chunk_4s))) if len(chunk_4s) > 0 else 0.0
         current_rms = float(np.sqrt(np.mean(chunk_4s ** 2))) if len(chunk_4s) > 0 else 0.0
 
-        effective_silence_threshold = max(0.003, min(0.035, (baseline_rms or 0.0) * 1.25))
+        # Ambang batas hening:
+        # Untuk live mikrofon, gunakan DEFAULT_SILENCE_RMS (0.015) atau hasil kalibrasi ruangan
+        # Untuk file audio, gunakan batas hening mutlak (0.003) agar file volume rendah tetap dianalisis model
+        if is_live:
+            if baseline_rms and baseline_rms > 0.005:
+                effective_silence_threshold = max(DEFAULT_SILENCE_RMS, min(0.045, baseline_rms * 1.30))
+            else:
+                effective_silence_threshold = DEFAULT_SILENCE_RMS
+        else:
+            effective_silence_threshold = 0.003
 
         if peak_amp < 1e-4 or current_rms <= effective_silence_threshold:
-            status_text = "Ambien Dasar (Terkalibrasi)" if (baseline_rms and baseline_rms > 0.005) else "Sangat Tenang / Hening"
+            status_text = "Ambien Dasar (Terkalibrasi)" if (baseline_rms and baseline_rms > 0.005) else "Sangat Tenang / Ambien Ruangan"
             latency = (time.perf_counter() - t0) * 1000
             return PredictionResult(
                 label="non-berisik",
@@ -93,10 +109,10 @@ class WKNNPredictor:
         prob_clean = float(probas[0])
         prob_noisy = float(probas[1])
 
-        # Kalibrasi energi akustik pengaman (suara RMS tinggi tidak boleh diloloskan sebagai non-berisik)
-        if current_rms >= 0.075 and pred_label_idx == 0:
+        # Kalibrasi energi akustik pengaman (hanya untuk suara sangat keras / saturasi ekstrem)
+        if current_rms >= EXTREME_NOISE_RMS and pred_label_idx == 0:
             pred_label_idx = 1
-            prob_noisy = max(prob_noisy, min(0.95, 0.60 + (current_rms - 0.075) * 3.0))
+            prob_noisy = max(prob_noisy, min(0.95, 0.70 + (current_rms - EXTREME_NOISE_RMS) * 2.0))
             prob_clean = 1.0 - prob_noisy
 
         is_noisy = (pred_label_idx == 1)
@@ -171,7 +187,7 @@ class WKNNPredictor:
             if len(chunk) < seg_samples:
                 chunk = np.pad(chunk, (0, seg_samples - len(chunk)), mode='constant')
 
-            pred_res = self.predict_chunk(chunk)
+            pred_res = self.predict_chunk(chunk, is_live=False)
             start_sec = idx * DURATION_SECONDS
             end_sec = min(start_sec + DURATION_SECONDS, duration_s)
 

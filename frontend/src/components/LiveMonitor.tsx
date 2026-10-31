@@ -30,12 +30,14 @@ const DURATION_S = 4.0;
 const BUFFER_SIZE = TARGET_SR * DURATION_S; // 88,200 sampel
 const NUM_TICKS = 28;
 
-export interface CycleOption {
+export interface ConsistencyOption {
   val: number;
   label: string;
 }
 
-export const CYCLE_OPTIONS: CycleOption[] = [
+export type CycleOption = ConsistencyOption;
+
+export const CONSISTENCY_OPTIONS: ConsistencyOption[] = [
   { val: 1, label: 'Real-Time (Langsung)' },
   { val: 4, label: '4 Detik' },
   { val: 5, label: '5 Detik' },
@@ -45,18 +47,33 @@ export const CYCLE_OPTIONS: CycleOption[] = [
   { val: 30, label: '30 Detik' },
 ];
 
+export const CYCLE_OPTIONS = CONSISTENCY_OPTIONS;
+
 export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveChange }) => {
   // State Monitoring
   const [isActive, setIsActive] = useState(false);
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [baselineRms, setBaselineRms] = useState<number>(() => {
     const saved = localStorage.getItem('acoustiknn_baseline_rms');
-    return saved ? parseFloat(saved) : 0.005;
+    return saved ? parseFloat(saved) : 0.015;
   });
 
-  // State Waktu Siklus Deteksi
-  const [cycleDuration, setCycleDuration] = useState<number>(5);
-  const [isCycleDropdownOpen, setIsCycleDropdownOpen] = useState(false);
+  // State Toleransi Kebisingan Konsisten (Rolling Window)
+  const [consistencyDuration, setConsistencyDuration] = useState<number>(5);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // State Evaluasi Jendela Geser (Rolling Window State)
+  const [windowNoisySeconds, setWindowNoisySeconds] = useState<number>(0);
+  const [windowTotalSeconds, setWindowTotalSeconds] = useState<number>(0);
+  const [totalAlertsCount, setTotalAlertsCount] = useState<number>(0);
+  const [alarmCooldownSeconds, setAlarmCooldownSeconds] = useState<number>(0);
+  const [lastAlertEvent, setLastAlertEvent] = useState<{
+    alertNum: number;
+    duration: number;
+    noisyCount: number;
+    windowLen: number;
+    timestamp: number;
+  } | null>(null);
 
   // State Audio Alarm
   const [alarmEnabled, setAlarmEnabled] = useState(true);
@@ -69,18 +86,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
   const [currentResult, setCurrentResult] = useState<PredictionResult | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
 
-  // State Siklus & Statistik Sesi
-  const [cycleCount, setCycleCount] = useState(1);
-  const [cycleSeconds, setCycleSeconds] = useState(0);
-  const [cycleNoisyCount, setCycleNoisyCount] = useState(0);
-  const [cycleTotalCount, setCycleTotalCount] = useState(0);
-  const [lastCycleVerdict, setLastCycleVerdict] = useState<{
-    cycleNum: number;
-    verdict: 'berisik' | 'non-berisik';
-    noisyPct: number;
-    timestamp: number;
-  } | null>(null);
-
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [totalChunks, setTotalChunks] = useState(0);
   const [noisyChunks, setNoisyChunks] = useState(0);
@@ -92,13 +97,12 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
   const noisyChunksRef = useRef(0);
   const cleanChunksRef = useRef(0);
 
-  const cycleDurationRef = useRef(cycleDuration);
-  cycleDurationRef.current = cycleDuration;
+  const consistencyDurationRef = useRef(consistencyDuration);
+  consistencyDurationRef.current = consistencyDuration;
 
-  const cycleCountRef = useRef(1);
-  const cycleSecondsRef = useRef(0);
-  const cycleNoisyCountRef = useRef(0);
-  const cycleTotalCountRef = useRef(0);
+  const rollingHistoryRef = useRef<boolean[]>([]);
+  const alarmCooldownUntilRef = useRef<number>(0);
+  const totalAlertsCountRef = useRef<number>(0);
 
   const baselineRmsRef = useRef(baselineRms);
   baselineRmsRef.current = baselineRms;
@@ -127,7 +131,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
   const circularBufferRef = useRef<Float32Array>(new Float32Array(BUFFER_SIZE));
   const bufferWriteIdxRef = useRef<number>(0);
   const isPredictingRef = useRef<boolean>(false);
-  const consecutiveNoisyRef = useRef<number>(0);
 
   // Refs Canvas Visualisasi
   const miniScopeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -142,13 +145,13 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
   const timerIntervalRef = useRef<number | null>(null);
   const predictIntervalRef = useRef<number | null>(null);
 
-  // Tutup dropdown siklus saat klik di luar
-  const cycleDropdownRef = useRef<HTMLDivElement | null>(null);
+  // Tutup dropdown saat klik di luar
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (cycleDropdownRef.current && !cycleDropdownRef.current.contains(e.target as Node)) {
-        setIsCycleDropdownOpen(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
@@ -190,8 +193,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
         stream.getTracks().forEach(t => t.stop());
         ctx.close().catch(() => {});
 
-        const calculated = count > 0 ? sumRms / count : 0.005;
-        const clamped = Math.max(0.002, Math.min(0.035, calculated));
+        const calculated = count > 0 ? sumRms / count : 0.015;
+        const clamped = Math.max(0.005, Math.min(0.050, calculated));
         setBaselineRms(clamped);
         localStorage.setItem('acoustiknn_baseline_rms', clamped.toString());
         setIsCalibrating(false);
@@ -273,23 +276,21 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
     noisyChunksRef.current = 0;
     cleanChunksRef.current = 0;
 
-    cycleCountRef.current = 1;
-    cycleSecondsRef.current = 0;
-    cycleNoisyCountRef.current = 0;
-    cycleTotalCountRef.current = 0;
+    rollingHistoryRef.current = [];
+    alarmCooldownUntilRef.current = 0;
+    totalAlertsCountRef.current = 0;
 
     setSessionSeconds(0);
     setTotalChunks(0);
     setNoisyChunks(0);
     setCleanChunks(0);
 
-    setCycleCount(1);
-    setCycleSeconds(0);
-    setCycleNoisyCount(0);
-    setCycleTotalCount(0);
-    setLastCycleVerdict(null);
+    setWindowNoisySeconds(0);
+    setWindowTotalSeconds(0);
+    setTotalAlertsCount(0);
+    setAlarmCooldownSeconds(0);
+    setLastAlertEvent(null);
 
-    consecutiveNoisyRef.current = 0;
     timelineDataRef.current = [];
     circularBufferRef.current.fill(0);
     bufferWriteIdxRef.current = 0;
@@ -350,64 +351,17 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
       setIsActive(true);
       onLiveChangeRef.current?.(true);
 
-      // Timer durasi sesi & siklus
+      // Timer durasi sesi berjalan & status cooldown alarm
       timerIntervalRef.current = window.setInterval(() => {
         sessionSecondsRef.current += 1;
         setSessionSeconds(sessionSecondsRef.current);
 
-        const targetCycle = cycleDurationRef.current;
-        cycleSecondsRef.current += 1;
-        setCycleSeconds(cycleSecondsRef.current);
-
-        // Cek apakah siklus saat ini telah genap mencapai durasi siklus
-        if (cycleSecondsRef.current >= targetCycle) {
-          const totInCycle = cycleTotalCountRef.current;
-          const noisyInCycle = cycleNoisyCountRef.current;
-          const noisyPct = totInCycle > 0 ? (noisyInCycle / totInCycle) * 100 : 0;
-          const verdict = noisyPct >= 50 ? 'berisik' : 'non-berisik';
-          const completedNum = cycleCountRef.current;
-
-          // Simpan riwayat siklus
-          const session: HistorySession = {
-            id: `cycle_${Date.now()}`,
-            type: 'live',
-            timestamp: Date.now(),
-            duration_s: targetCycle,
-            total_segments: totInCycle,
-            noisy_segments: noisyInCycle,
-            clean_segments: totInCycle - noisyInCycle,
-            noisy_percentage: Math.round(noisyPct * 10) / 10,
-            dominant_label: verdict,
-            avg_confidence: 97.2,
-            filename: targetCycle === 1
-              ? `Siklus Real-Time #${completedNum}`
-              : `Siklus #${completedNum} (${targetCycle} Detik)`
-          };
-          onSaveSessionRef.current(session);
-
-          // Tampilkan notifikasi kesimpulan siklus
-          setLastCycleVerdict({
-            cycleNum: completedNum,
-            verdict,
-            noisyPct,
-            timestamp: Date.now()
-          });
-
-          // Setelah satu siklus selesai dan diklasifikasikan sebagai berisik, maka alarm akan berbunyi dalam waktu 3 detik
-          if (verdict === 'berisik' && alarmEnabledRef.current) {
-            alertPlayer.playCycleAlarm(3.0, alarmVolumeRef.current);
-          }
-
-          // Mulai siklus berikutnya secara mulus
-          cycleCountRef.current += 1;
-          cycleSecondsRef.current = 0;
-          cycleNoisyCountRef.current = 0;
-          cycleTotalCountRef.current = 0;
-
-          setCycleCount(cycleCountRef.current);
-          setCycleSeconds(0);
-          setCycleNoisyCount(0);
-          setCycleTotalCount(0);
+        const now = Date.now();
+        if (now < alarmCooldownUntilRef.current) {
+          const cd = Math.max(0, Math.ceil((alarmCooldownUntilRef.current - now) / 1000));
+          setAlarmCooldownSeconds(cd);
+        } else {
+          setAlarmCooldownSeconds(0);
         }
       }, 1000);
 
@@ -437,15 +391,11 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
           totalChunksRef.current += 1;
           setTotalChunks(totalChunksRef.current);
 
-          // Update agregat siklus berjalan
-          cycleTotalCountRef.current += 1;
-          setCycleTotalCount(cycleTotalCountRef.current);
+          const isNoisySample = result.prediction === 1;
 
-          if (result.prediction === 1) {
+          if (isNoisySample) {
             noisyChunksRef.current += 1;
             setNoisyChunks(noisyChunksRef.current);
-            cycleNoisyCountRef.current += 1;
-            setCycleNoisyCount(cycleNoisyCountRef.current);
           } else {
             cleanChunksRef.current += 1;
             setCleanChunks(cleanChunksRef.current);
@@ -460,6 +410,84 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
           });
           if (timelineDataRef.current.length > 30) {
             timelineDataRef.current.shift();
+          }
+
+          // =========================================================================
+          // EVALUASI KEBISINGAN KONSISTEN (TOLERANSI BERGERAK / ROLLING WINDOW)
+          // =========================================================================
+          const targetDuration = consistencyDurationRef.current;
+          const now = Date.now();
+
+          // Jika alarm sedang berbunyi (periode cooldown 3 detik), jangan memicu alarm baru
+          if (now < alarmCooldownUntilRef.current) {
+            return;
+          }
+
+          // Masukkan sampel detik ini ke buffer jendela geser
+          rollingHistoryRef.current.push(isNoisySample);
+          if (rollingHistoryRef.current.length > targetDuration) {
+            rollingHistoryRef.current.shift();
+          }
+
+          const currentWindowLen = rollingHistoryRef.current.length;
+          const currentNoisyCount = rollingHistoryRef.current.filter(Boolean).length;
+          setWindowNoisySeconds(currentNoisyCount);
+          setWindowTotalSeconds(currentWindowLen);
+
+          // Ambang batas toleransi bergerak:
+          // - Real-Time (1s) : minimal 1s bising (100%)
+          // - 4 Detik        : minimal 3s bising (75%)
+          // - 5s, 10s, dst   : minimal 80% bising (misal 24 dari 30s)
+          const minRequiredNoisy = targetDuration === 1
+            ? 1
+            : (targetDuration === 4 ? 3 : Math.ceil(targetDuration * 0.80));
+
+          const isConsistent = currentWindowLen >= targetDuration && currentNoisyCount >= minRequiredNoisy;
+
+          if (isConsistent) {
+            // Bunyikan alarm audio selama tepat 3.0 detik
+            if (alarmEnabledRef.current) {
+              alertPlayer.playCycleAlarm(3.0, alarmVolumeRef.current);
+            }
+
+            // Set cooldown 3 detik sesuai durasi alarm
+            alarmCooldownUntilRef.current = now + 3000;
+            setAlarmCooldownSeconds(3);
+
+            totalAlertsCountRef.current += 1;
+            const alertNum = totalAlertsCountRef.current;
+            setTotalAlertsCount(alertNum);
+
+            setLastAlertEvent({
+              alertNum,
+              duration: targetDuration,
+              noisyCount: currentNoisyCount,
+              windowLen: currentWindowLen,
+              timestamp: now
+            });
+
+            // Simpan log event peringatan konsisten ke Riwayat
+            const session: HistorySession = {
+              id: `consistent_${Date.now()}`,
+              type: 'live',
+              timestamp: now,
+              duration_s: targetDuration,
+              total_segments: currentWindowLen,
+              noisy_segments: currentNoisyCount,
+              clean_segments: currentWindowLen - currentNoisyCount,
+              noisy_percentage: Math.round((currentNoisyCount / currentWindowLen) * 1000) / 10,
+              dominant_label: 'berisik',
+              avg_confidence: result.confidence,
+              filename: targetDuration === 1
+                ? `Peringatan Bising Real-Time #${alertNum}`
+                : `Kebisingan Konsisten ${targetDuration}s #${alertNum} (${currentNoisyCount}/${currentWindowLen}s)`
+            };
+            onSaveSessionRef.current(session);
+
+            // Reset buffer jendela geser agar evaluasi konsistensi berikutnya mulai segar
+            rollingHistoryRef.current = [];
+            setWindowNoisySeconds(0);
+            setWindowTotalSeconds(0);
           }
 
         } catch (err) {
@@ -698,11 +726,16 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
     currentResult ? (currentResult.probabilities.berisik * NUM_TICKS) : 0
   );
 
-  const selectedCycleObj = CYCLE_OPTIONS.find(c => c.val === cycleDuration) || CYCLE_OPTIONS[2];
+  const selectedOption = CONSISTENCY_OPTIONS.find(c => c.val === consistencyDuration) || CONSISTENCY_OPTIONS[2];
 
-  // Hitung progres siklus saat ini (0 - 100%)
-  const cycleProgressPct = cycleDuration > 0
-    ? Math.min(100, Math.max(0, (cycleSeconds / cycleDuration) * 100))
+  // Hitung ambang batas toleransi bergerak
+  const minRequiredNoisy = consistencyDuration === 1
+    ? 1
+    : (consistencyDuration === 4 ? 3 : Math.ceil(consistencyDuration * 0.80));
+
+  // Hitung progres akumulasi bising terhadap batas toleransi konsisten (0 - 100%)
+  const progressPct = minRequiredNoisy > 0
+    ? Math.min(100, Math.round((windowNoisySeconds / minRequiredNoisy) * 100))
     : 0;
 
   return (
@@ -745,7 +778,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
             {/* Description */}
             <p className="rt-hero-desc">
               {!isActive
-                ? 'Pilih waktu siklus deteksi lalu klik Mulai Monitoring untuk menyalakan klasifikasi audio real-time.'
+                ? 'Pilih toleransi kebisingan konsisten lalu klik Mulai Monitoring untuk menyalakan deteksi real-time.'
                 : currentResult?.status_text || 'Menganalisis sinyal akustik mikrofon secara real-time...'}
             </p>
 
@@ -794,9 +827,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
               </div>
 
               <div>
-                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Waktu Siklus</div>
+                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Toleransi Bergerak</div>
                 <div className="rt-hero-metric-val text-teal-700">
-                  {cycleDuration === 1 ? 'Real-Time' : `${cycleDuration} Detik`}
+                  {consistencyDuration === 1 ? 'Real-Time' : `${consistencyDuration} Detik`}
                 </div>
               </div>
 
@@ -808,9 +841,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
               </div>
 
               <div>
-                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Siklus Aktif</div>
-                <div className="rt-hero-metric-val font-mono">
-                  {isActive ? `#${cycleCount}` : 'Standby'}
+                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Akumulasi Bising</div>
+                <div className={`rt-hero-metric-val font-mono ${progressPct >= 70 ? 'text-rose-600' : 'text-slate-800'}`}>
+                  {isActive ? `${windowNoisySeconds}s / ${minRequiredNoisy}s` : 'Standby'}
                 </div>
               </div>
             </div>
@@ -852,13 +885,12 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
                 <span>{isActive ? 'Hentikan Pemantauan' : 'Mulai Monitoring Real-Time'}</span>
               </button>
 
-              {/* Menu Terpadu: Profil Deteksi & Alarm */}
-              {/* Menu Waktu Siklus Deteksi */}
+              {/* Menu Terpadu: Toleransi Kebisingan Konsisten & Alarm */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                     <HeroIcon name="clock" className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Waktu Siklus Deteksi</span>
+                    <span>Toleransi Kebisingan Konsisten</span>
                   </label>
                   <div className="flex items-center gap-2">
                     {alarmEnabled && (
@@ -891,37 +923,42 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
                   </div>
                 </div>
 
-                <div className="rt-custom-dropdown z-30" ref={cycleDropdownRef}>
+                <div className="rt-custom-dropdown z-30" ref={dropdownRef}>
                   <button
                     type="button"
                     disabled={isActive}
-                    onClick={() => setIsCycleDropdownOpen(!isCycleDropdownOpen)}
-                    className={`rt-custom-dropdown-trigger ${isCycleDropdownOpen ? 'open' : ''} ${isActive ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className={`rt-custom-dropdown-trigger ${isDropdownOpen ? 'open' : ''} ${isActive ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <span className="font-bold text-slate-800 text-xs">
-                      {selectedCycleObj.label}
+                      {selectedOption.label}
                     </span>
                     <HeroIcon
                       name="chevron-down"
-                      className={`w-4 h-4 text-slate-400 transition-transform ${isCycleDropdownOpen ? 'rotate-180' : ''}`}
+                      className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
                     />
                   </button>
 
                   {/* Dropdown Popover */}
-                  {isCycleDropdownOpen && (
-                    <div className="rt-custom-dropdown-popover max-h-56 overflow-y-auto overscroll-contain shadow-xl border border-slate-200">
+                  {isDropdownOpen && (
+                    <div className="rt-custom-dropdown-popover max-h-60 overflow-y-auto overscroll-contain shadow-xl border border-slate-200">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-1.5 sticky top-0 bg-white border-b border-slate-100">
-                        Pilihan Siklus Deteksi
+                        Toleransi Bergerak (Rolling Window)
                       </div>
                       <div className="space-y-0.5 pr-1 pt-1">
-                        {CYCLE_OPTIONS.map((opt) => {
-                          const isSelected = cycleDuration === opt.val;
+                        {CONSISTENCY_OPTIONS.map((opt) => {
+                          const isSelected = consistencyDuration === opt.val;
+                          const minReq = opt.val === 1 ? 1 : (opt.val === 4 ? 3 : Math.ceil(opt.val * 0.8));
+                          const desc = opt.val === 1
+                            ? 'Peringatan aktif langsung pada deteksi bising pertama (1 detik)'
+                            : `Peringatan aktif jika bising konsisten minimal ${minReq} dari ${opt.val} detik terakhir (${opt.val === 4 ? '75%' : '80%'})`;
+
                           return (
                             <div
                               key={opt.val}
                               onClick={() => {
-                                setCycleDuration(opt.val);
-                                setIsCycleDropdownOpen(false);
+                                setConsistencyDuration(opt.val);
+                                setIsDropdownOpen(false);
                               }}
                               className={`rt-dropdown-item ${isSelected ? 'selected' : ''}`}
                             >
@@ -931,9 +968,17 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
                                 </div>
                               </div>
                               <div className="flex-1">
-                                <span className={`text-xs ${isSelected ? 'font-bold text-teal-800' : 'font-medium text-slate-800'}`}>
-                                  {opt.label}
-                                </span>
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-xs ${isSelected ? 'font-bold text-teal-800' : 'font-medium text-slate-800'}`}>
+                                    {opt.label}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    {opt.val === 1 ? 'Langsung' : `Min ${minReq}s`}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                                  {desc}
+                                </p>
                               </div>
                             </div>
                           );
@@ -980,31 +1025,40 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
       </div>
 
       {/* ==============================================================================
-          CYCLE PROGRESS & PERSISTENCE BANNER (Reference okan-test: rt-persistence-hero-banner)
+          PERSISTENCE BANNER & PROGRESS TRACK (Jendela Bergerak / Rolling Window)
           ============================================================================== */}
-      {isActive && cycleDuration > 0 && (
-        <div className={`rt-persistence-hero-banner ${isNoisy ? 'noisy' : ''}`}>
+      {isActive && (
+        <div className={`rt-persistence-hero-banner ${alarmCooldownSeconds > 0 || progressPct >= 70 ? 'noisy' : ''}`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <span className={`w-2.5 h-2.5 rounded-full ${
-                isNoisy ? 'bg-rose-600 animate-ping' : 'bg-teal-600 animate-pulse'
+                alarmCooldownSeconds > 0
+                  ? 'bg-rose-600 animate-ping'
+                  : (progressPct >= 70 ? 'bg-amber-500 animate-pulse' : 'bg-teal-600 animate-pulse')
               }`} />
               <div>
                 <span className="font-bold text-xs sm:text-sm text-slate-800">
-                  Siklus #{cycleCount} Sedang Berjalan ({cycleSeconds}s / {cycleDuration}s)
+                  {alarmCooldownSeconds > 0
+                    ? `Peringatan Aktif: Alarm Berbunyi (${alarmCooldownSeconds}s tersisa)`
+                    : `Pemantauan Toleransi Bergerak (${selectedOption.label})`
+                  }
                 </span>
                 <span className="text-xs text-slate-500 ml-2 hidden sm:inline">
-                  &bull; {cycleNoisyCount} segmen bising terdeteksi dari {cycleTotalCount} evaluasi
+                  &bull; Akumulasi bising saat ini: {windowNoisySeconds}s dari jendela {windowTotalSeconds}s (Ambang Peringatan: minimal {minRequiredNoisy}s bising)
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-auto">
               <span className="text-xs font-mono font-semibold text-slate-500">
-                Sisa Waktu:
+                Progres Bising:
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-teal-800 border border-slate-200">
-                00:{String(Math.max(0, cycleDuration - cycleSeconds)).padStart(2, '0')}s
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border ${
+                progressPct >= 100
+                  ? 'bg-rose-100 text-rose-800 border-rose-300'
+                  : (progressPct >= 70 ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-teal-800 border-slate-200')
+              }`}>
+                {windowNoisySeconds}s / {minRequiredNoisy}s ({progressPct}%)
               </span>
             </div>
           </div>
@@ -1012,35 +1066,31 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
           {/* Progress Track & Animated Fill Bar */}
           <div className="rt-hero-banner-track">
             <div
-              className={`rt-hero-banner-fill ${isNoisy ? 'noisy' : ''}`}
-              style={{ width: `${cycleProgressPct}%` }}
+              className={`rt-hero-banner-fill ${progressPct >= 70 ? 'noisy' : ''}`}
+              style={{ width: `${progressPct}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* Notifikasi Hasil Siklus yang Baru Selesai */}
-      {lastCycleVerdict && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 animation-fadeIn ${
-          lastCycleVerdict.verdict === 'berisik'
-            ? 'bg-rose-50 border-rose-200 text-rose-800'
-            : 'bg-teal-50 border-teal-200 text-teal-800'
-        }`}>
+      {/* Notifikasi Peringatan Terakhir yang Dipicu */}
+      {lastAlertEvent && (
+        <div className="p-4 rounded-xl border bg-rose-50 border-rose-200 text-rose-800 flex items-center justify-between gap-3 animation-fadeIn">
           <div className="flex items-center gap-2.5">
             <HeroIcon
-              name={lastCycleVerdict.verdict === 'berisik' ? 'exclamation-triangle' : 'check-circle'}
-              className="w-5 h-5 flex-shrink-0"
+              name="exclamation-triangle"
+              className="w-5 h-5 flex-shrink-0 text-rose-600"
             />
             <div className="text-xs sm:text-sm">
-              <span className="font-bold">Siklus #{lastCycleVerdict.cycleNum} Selesai:</span>{' '}
-              Kondisi audio didominasi{' '}
+              <span className="font-bold">Peringatan Kebisingan #{lastAlertEvent.alertNum}:</span>{' '}
+              Terdeteksi kebisingan konsisten selama{' '}
               <span className="font-extrabold uppercase">
-                {lastCycleVerdict.verdict === 'berisik' ? 'Berisik' : 'Kondusif (Non-Berisik)'}
+                {lastAlertEvent.duration === 1 ? 'Real-Time' : `${lastAlertEvent.duration} Detik`}
               </span>{' '}
-              ({lastCycleVerdict.noisyPct.toFixed(1)}% rasio kebisingan).
-              {lastCycleVerdict.verdict === 'berisik' && alarmEnabled && (
+              ({lastAlertEvent.noisyCount} dari {lastAlertEvent.windowLen} detik terakhir berisik).
+              {alarmEnabled && (
                 <span className="ml-1.5 font-bold text-rose-700">
-                  &bull; Alarm berbunyi 3 detik.
+                  &bull; Alarm audio berbunyi 3 detik.
                 </span>
               )}
               {' '}Tersimpan otomatis ke Riwayat.
@@ -1048,7 +1098,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
           </div>
 
           <span className="text-[11px] font-mono opacity-70 whitespace-nowrap hidden sm:inline">
-            Tersimpan
+            {new Date(lastAlertEvent.timestamp).toLocaleTimeString()}
           </span>
         </div>
       )}
@@ -1177,11 +1227,19 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Latensi Pemrosesan:</span>
-            <span className="font-mono font-bold text-slate-800">
-              {currentResult ? `${currentResult.latency_ms} ms` : '-- ms'}
-            </span>
+          <div className="mt-4 pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-500">
+            <div className="flex items-center justify-between">
+              <span>Peringatan Terpicu:</span>
+              <span className="font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                {totalAlertsCount} kali
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Latensi Pemrosesan:</span>
+              <span className="font-mono font-bold text-slate-800">
+                {currentResult ? `${currentResult.latency_ms} ms` : '-- ms'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
