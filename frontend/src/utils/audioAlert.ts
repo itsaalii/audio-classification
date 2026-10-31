@@ -6,6 +6,9 @@
 class AlertAudioPlayer {
   private ctx: AudioContext | null = null;
   private isPlaying = false;
+  private activeOsc: OscillatorNode | null = null;
+  private activeGain: GainNode | null = null;
+  private stopTimeout: number | null = null;
 
   private getContext(): AudioContext {
     if (!this.ctx || this.ctx.state === 'closed') {
@@ -19,7 +22,7 @@ class AlertAudioPlayer {
   }
 
   /**
-   * Bunyikan nada peringatan berisik (dua nada menurun 880Hz -> 660Hz).
+   * Bunyikan nada peringatan singkat.
    */
   public playWarning(volume: number = 0.5) {
     if (this.isPlaying) return;
@@ -53,45 +56,73 @@ class AlertAudioPlayer {
   }
 
   /**
-   * Bunyikan alarm siklus berisik selama durasi tertentu (3 detik).
+   * Bunyikan nada beep panjang kontinu tanpa putus-putus.
+   * Default durasi 3.0 detik, frekuensi konstan 880 Hz.
    */
-  public playCycleAlarm(durationSec: number = 3.0, volume: number = 0.7) {
-    if (this.isPlaying) return;
+  public playLongBeep(durationSec: number = 3.0, volume: number = 0.7) {
+    if (this.isPlaying) {
+      this.stop();
+    }
     try {
       const ctx = this.getContext();
       this.isPlaying = true;
 
       const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(volume * 0.5, now);
+
+      this.activeOsc = osc;
+      this.activeGain = gain;
+
+      // Gelombang sinus murni kontinu tanpa modulasi atau jeda pulsa
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+
+      const targetGain = Math.max(0.01, Math.min(1.0, volume * 0.45));
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(targetGain, now + 0.05);
+      gain.gain.setValueAtTime(targetGain, now + Math.max(0.05, durationSec - 0.05));
+      gain.gain.linearRampToValueAtTime(0.0001, now + durationSec);
+
+      osc.connect(gain);
       gain.connect(ctx.destination);
 
-      const interval = 0.25;
-      const pulseCount = Math.floor(durationSec / interval);
+      osc.start(now);
+      osc.stop(now + durationSec);
 
-      for (let i = 0; i < pulseCount; i++) {
-        const osc = ctx.createOscillator();
-        osc.type = 'triangle';
-        const freq = i % 2 === 0 ? 1100 : 880;
-        const startTime = now + i * interval;
-        osc.frequency.setValueAtTime(freq, startTime);
-        osc.connect(gain);
-        osc.start(startTime);
-        osc.stop(startTime + 0.15);
-      }
-
-      setTimeout(() => {
-        this.isPlaying = false;
+      this.stopTimeout = window.setTimeout(() => {
+        this.stop();
       }, durationSec * 1000);
     } catch {
       this.isPlaying = false;
     }
   }
 
+  public playCycleAlarm(durationSec: number = 3.0, volume: number = 0.7) {
+    this.playLongBeep(durationSec, volume);
+  }
+
   /**
-   * Hentikan status alarm yang sedang berbunyi.
+   * Hentikan beep yang sedang berbunyi seketika.
    */
   public stop() {
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
+    if (this.activeOsc) {
+      try {
+        this.activeOsc.stop();
+        this.activeOsc.disconnect();
+      } catch {}
+      this.activeOsc = null;
+    }
+    if (this.activeGain) {
+      try {
+        this.activeGain.disconnect();
+      } catch {}
+      this.activeGain = null;
+    }
     this.isPlaying = false;
   }
 }

@@ -2,23 +2,16 @@
 
 1. **Model Deteksi**:
    - Menggunakan sistem **Kebisingan Konsisten dengan Toleransi Bergerak (*Rolling Window*)**.
-   - Menghilangkan konsep siklus blok kaku. Evaluasi berjalan secara dinamis dan kontinu tiap detik.
+   - Pilihan durasi toleransi: Real-Time (Langsung), 4 Detik, 5 Detik, 10 Detik, 15 Detik, 20 Detik, 30 Detik.
+   - Evaluasi berjalan secara dinamis dan kontinu tiap detik.
 
-2. **Pilihan Waktu Toleransi Konsisten**:
-   - `Real-Time (Langsung)`: Alarm aktif langsung pada deteksi bising pertama (1 detik).
-   - `4 Detik`: Alarm aktif jika bising konsisten minimal 3 dari 4 detik terakhir (75%).
-   - `5 Detik`: Alarm aktif jika bising konsisten minimal 4 dari 5 detik terakhir (80%).
-   - `10 Detik`: Alarm aktif jika bising konsisten minimal 8 dari 10 detik terakhir (80%).
-   - `15 Detik`: Alarm aktif jika bising konsisten minimal 12 dari 15 detik terakhir (80%).
-   - `20 Detik`: Alarm aktif jika bising konsisten minimal 16 dari 20 detik terakhir (80%).
-   - `30 Detik`: Alarm aktif jika bising konsisten minimal 24 dari 30 detik terakhir (80%).
+2. **Karakteristik & Kustomisasi Beep Alarm**:
+   - Suara alarm menggunakan **beep panjang kontinu** (gelombang sinus murni, tanpa putus-putus atau modulasi pulsa).
+   - Durasi beep bawaan (**default**) adalah **3 detik**.
+   - Kustomisasi durasi beep tersedia: **1s**, **2s**, **3s (Default)**, **4s**, dan **5s**.
+   - Menu penonaktifan beep: Tombol togol **Aktif / Nonaktif** untuk mematikan atau mengaktifkan suara beep kapan saja.
 
-3. **Mekanisme Alarm & Cooldown**:
-   - Begitu batas kebisingan konsisten terpenuhi, alarm audio Web Audio API otomatis berbunyi tepat selama **3 detik**.
-   - Diberikan jeda cooldown selama 3 detik sesuai durasi alarm untuk mencegah alarm berulang terus-menerus.
-   - Buffer jendela geser di-reset sehingga evaluasi periode konsisten baru dimulai dari awal.
-
-4. **Kaidah Tampilan & Bahasa**:
-   - Seluruh deskripsi teknis lugas, faktual, dan jelas tanpa istilah ambigu seperti 'rekomendasi' atau 'keseimbangan ideal'.
+3. **Kaidah Tampilan Web**:
+   - **Bebas dari deskripsi berlebih**: Tampilan web bersih dan langsung fokus pada kontrol serta metrik tanpa teks penjelasan panjang.
    - Nol emoji (100% SVG Heroicons).
    - Tipografi font Poppins dan palet warna Teal.

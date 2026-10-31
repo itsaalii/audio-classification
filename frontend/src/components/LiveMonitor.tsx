@@ -75,8 +75,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
     timestamp: number;
   } | null>(null);
 
-  // State Audio Alarm
+  // State Audio Alarm / Beep Panjang
   const [alarmEnabled, setAlarmEnabled] = useState(true);
+  const [beepDuration, setBeepDuration] = useState<number>(3); // Default 3 detik
   const [alarmVolume, setAlarmVolume] = useState<number>(0.6);
 
   // State Diagnostik Collapsible
@@ -109,6 +110,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
 
   const alarmEnabledRef = useRef(alarmEnabled);
   alarmEnabledRef.current = alarmEnabled;
+
+  const beepDurationRef = useRef(beepDuration);
+  beepDurationRef.current = beepDuration;
 
   const alarmVolumeRef = useRef(alarmVolume);
   alarmVolumeRef.current = alarmVolume;
@@ -445,14 +449,16 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
           const isConsistent = currentWindowLen >= targetDuration && currentNoisyCount >= minRequiredNoisy;
 
           if (isConsistent) {
-            // Bunyikan alarm audio selama tepat 3.0 detik
+            const currentBeepDur = beepDurationRef.current;
+
+            // Bunyikan beep panjang kontinu jika tidak dinonaktifkan
             if (alarmEnabledRef.current) {
-              alertPlayer.playCycleAlarm(3.0, alarmVolumeRef.current);
+              alertPlayer.playLongBeep(currentBeepDur, alarmVolumeRef.current);
             }
 
-            // Set cooldown 3 detik sesuai durasi alarm
-            alarmCooldownUntilRef.current = now + 3000;
-            setAlarmCooldownSeconds(3);
+            // Set cooldown sesuai durasi beep
+            alarmCooldownUntilRef.current = now + (currentBeepDur * 1000);
+            setAlarmCooldownSeconds(currentBeepDur);
 
             totalAlertsCountRef.current += 1;
             const alertNum = totalAlertsCountRef.current;
@@ -885,42 +891,13 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
                 <span>{isActive ? 'Hentikan Pemantauan' : 'Mulai Monitoring Real-Time'}</span>
               </button>
 
-              {/* Menu Terpadu: Toleransi Kebisingan Konsisten & Alarm */}
+              {/* Toleransi Kebisingan Konsisten */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                     <HeroIcon name="clock" className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Toleransi Kebisingan Konsisten</span>
+                    <span>Toleransi Kebisingan</span>
                   </label>
-                  <div className="flex items-center gap-2">
-                    {alarmEnabled && (
-                      <div className="flex items-center gap-1" title={`Volume Alarm: ${Math.round(alarmVolume * 100)}%`}>
-                        <HeroIcon name="volume-up" className="w-3 h-3 text-slate-400" />
-                        <input
-                          type="range"
-                          min="0.1"
-                          max="1.0"
-                          step="0.1"
-                          value={alarmVolume}
-                          onChange={(e) => setAlarmVolume(parseFloat(e.target.value))}
-                          className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
-                        />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = !alarmEnabled;
-                        setAlarmEnabled(next);
-                        if (!next) alertPlayer.stop();
-                      }}
-                      className={`text-[11px] font-semibold transition-colors ${
-                        alarmEnabled ? 'text-teal-700 hover:underline' : 'text-slate-400 hover:text-slate-600'
-                      }`}
-                    >
-                      {alarmEnabled ? 'Alarm Aktif (3s)' : 'Mute'}
-                    </button>
-                  </div>
                 </div>
 
                 <div className="rt-custom-dropdown z-30" ref={dropdownRef}>
@@ -943,15 +920,12 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
                   {isDropdownOpen && (
                     <div className="rt-custom-dropdown-popover max-h-60 overflow-y-auto overscroll-contain shadow-xl border border-slate-200">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-1.5 sticky top-0 bg-white border-b border-slate-100">
-                        Toleransi Bergerak (Rolling Window)
+                        Pilihan Toleransi
                       </div>
                       <div className="space-y-0.5 pr-1 pt-1">
                         {CONSISTENCY_OPTIONS.map((opt) => {
                           const isSelected = consistencyDuration === opt.val;
                           const minReq = opt.val === 1 ? 1 : (opt.val === 4 ? 3 : Math.ceil(opt.val * 0.8));
-                          const desc = opt.val === 1
-                            ? 'Peringatan aktif langsung pada deteksi bising pertama (1 detik)'
-                            : `Peringatan aktif jika bising konsisten minimal ${minReq} dari ${opt.val} detik terakhir (${opt.val === 4 ? '75%' : '80%'})`;
 
                           return (
                             <div
@@ -973,12 +947,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
                                     {opt.label}
                                   </span>
                                   <span className="text-[10px] font-mono text-slate-400">
-                                    {opt.val === 1 ? 'Langsung' : `Min ${minReq}s`}
+                                    {opt.val === 1 ? '1s' : `Min ${minReq}s`}
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                                  {desc}
-                                </p>
                               </div>
                             </div>
                           );
@@ -987,6 +958,73 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Menu Pengaturan Beep Audio & Kustomisasi Durasi */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                    <HeroIcon name="bell" className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Beep Peringatan</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {alarmEnabled && (
+                      <div className="flex items-center gap-1" title="Volume">
+                        <HeroIcon name="volume-up" className="w-3 h-3 text-slate-400" />
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="1.0"
+                          step="0.1"
+                          value={alarmVolume}
+                          onChange={(e) => setAlarmVolume(parseFloat(e.target.value))}
+                          className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                        />
+                      </div>
+                    )}
+                    {/* Menu Menonaktifkan Beep */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !alarmEnabled;
+                        setAlarmEnabled(next);
+                        if (!next) alertPlayer.stop();
+                      }}
+                      className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors flex items-center gap-1 ${
+                        alarmEnabled
+                          ? 'bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100'
+                          : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${alarmEnabled ? 'bg-teal-600' : 'bg-slate-400'}`} />
+                      <span>{alarmEnabled ? 'Aktif' : 'Nonaktif'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Kustomisasi Durasi Beep (Default: 3 Detik) */}
+                {alarmEnabled && (
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                    <span className="text-[11px] font-medium text-slate-600">Durasi:</span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          disabled={isActive}
+                          onClick={() => setBeepDuration(sec)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono transition-colors ${
+                            beepDuration === sec
+                              ? 'bg-teal-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:bg-slate-200'
+                          } ${isActive ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {sec}s{sec === 3 ? '*' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Kalibrasi Ambien Ruangan */}
@@ -1039,12 +1077,12 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
               <div>
                 <span className="font-bold text-xs sm:text-sm text-slate-800">
                   {alarmCooldownSeconds > 0
-                    ? `Peringatan Aktif: Alarm Berbunyi (${alarmCooldownSeconds}s tersisa)`
+                    ? `Peringatan Aktif: Beep Berbunyi (${alarmCooldownSeconds}s)`
                     : `Pemantauan Toleransi Bergerak (${selectedOption.label})`
                   }
                 </span>
                 <span className="text-xs text-slate-500 ml-2 hidden sm:inline">
-                  &bull; Akumulasi bising saat ini: {windowNoisySeconds}s dari jendela {windowTotalSeconds}s (Ambang Peringatan: minimal {minRequiredNoisy}s bising)
+                  &bull; Akumulasi: {windowNoisySeconds}s / {windowTotalSeconds}s (Batas: {minRequiredNoisy}s)
                 </span>
               </div>
             </div>
@@ -1090,7 +1128,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({ onSaveSession, onLiveC
               ({lastAlertEvent.noisyCount} dari {lastAlertEvent.windowLen} detik terakhir berisik).
               {alarmEnabled && (
                 <span className="ml-1.5 font-bold text-rose-700">
-                  &bull; Alarm audio berbunyi 3 detik.
+                  &bull; Beep berbunyi {beepDuration} detik.
                 </span>
               )}
               {' '}Tersimpan otomatis ke Riwayat.
