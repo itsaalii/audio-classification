@@ -29,11 +29,11 @@ export const ModelIntelligence: React.FC<ModelIntelligenceProps> = ({ modelInfo 
           <div className="flex items-center gap-3">
             <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 text-right">
               <div className="text-[10px] text-teal-700 uppercase font-semibold">Akurasi Data Uji</div>
-              <div className="text-2xl font-bold font-mono text-teal-800">97.64%</div>
+              <div className="text-2xl font-bold font-mono text-teal-800">-%</div>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-right">
               <div className="text-[10px] text-slate-500 uppercase font-semibold">5-Fold CV</div>
-              <div className="text-2xl font-bold font-mono text-slate-800">97.58%</div>
+              <div className="text-2xl font-bold font-mono text-slate-800">-</div>
             </div>
           </div>
         </div>
