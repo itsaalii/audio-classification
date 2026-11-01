@@ -1,50 +1,57 @@
 # Data Understanding
 
-## 1. Sumber Data & Struktur Dataset Mentah
-Dataset yang digunakan dalam proyek ini terdiri atas sekumpulan rekaman audio digital dalam format kompresi MP3 mono yang merekam berbagai kondisi akustik nyata langsung di dalam **Laboratorium Teknik Informatika**. Seluruh rekaman mentah dihimpun ke dalam dua berkas arsip terkompresi utama:
-- **`berisik.zip`:** Berisi 100 berkas audio rekaman berlabel **Berisik (*Noisy*)** (Label numerik: `1`).
-- **`non-berisik.zip`:** Berisi 100 berkas audio rekaman berlabel **Non-Berisik (*Clean/Quiet*)** (Label numerik: `0`).
+Dokumentasi fase kedua metodologi **CRISP-DM (Cross-Industry Standard Process for Data Mining)** untuk analisis data akustik, digitalisasi sinyal, serta ekstraksi 16 parameter Pengolahan Sinyal Digital (PSD).
 
-Setiap berkas rekaman memiliki durasi sekitar **30 detik**, menghasilkan total durasi audio mentah sekitar **100 menit** (6.000 detik) rekaman audio lingkungan laboratorium.
+---
 
-### Variasi Karakteristik Audio Mentah di Laboratorium
-Kedua kelas audio merepresentasikan kondisi realistis yang terjadi sehari-hari di Laboratorium Teknik Informatika:
-1. **Kelas Berisik (`label = 1`):**
-   - Obrolan ramai dan diskusi keras mahasiswa saat praktikum atau pergantian sesi lab.
-   - Suara tawa keras atau candaan mahasiswa di sela-sela praktikum.
-   - Keributan gesekan roda kursi laboratorium pada lantai serta hentakan kaki.
-   - Suara pintu laboratorium yang dibuka-tutup secara kasar atau berulang-ulang.
-   - Suara panggilan telepon seluler atau deringan notifikasi gawai bervolume tinggi.
-   - Suara pemutaran video/musik dari laptop mahasiswa tanpa menggunakan penyuara telinga (*headset*).
-2. **Kelas Non-Berisik (`label = 0`):**
-   - Suasana hening dan tertib saat mahasiswa berkonsentrasi mengetik kode program (*coding/debugging*).
+## 1. Sumber Data & Karakteristik Dataset Mentah
+
+Dataset audio yang digunakan dalam proyek ini bersumber langsung dari perekaman kondisi akustik di **Laboratorium Teknik Informatika**. Seluruh sampel rekaman dikelompokkan ke dalam dua arsip berkas utama:
+- **`berisik.zip`:** Memuat 100 berkas audio rekaman berlabel **Berisik (*Noisy*)** (Label numerik: `1`).
+- **`non-berisik.zip`:** Memuat 100 berkas audio rekaman berlabel **Non-Berisik (*Clean/Quiet*)** (Label numerik: `0`).
+
+Setiap berkas memiliki durasi rekaman rata-rata **30 detik**, menghasilkan total durasi audio mentah sekitar **100 menit (6.000 detik)**.
+
+### Variasi Akustik di Lingkungan Laboratorium
+Kedua kelas audio mencerminkan dinamika nyata sehari-hari di Laboratorium Teknik Informatika:
+1. **Karakteristik Kelas Berisik (`label = 1`):**
+   - Suara obrolan ramai dan diskusi keras mahasiswa saat praktikum atau pergantian sesi.
+   - Suara tawa terbahak-bahak atau candaan saat jeda modul praktikum.
+   - Keributan gesekan roda kursi laboratorium pada ubin lantai serta hentakan kaki.
+   - Suara pintu laboratorium yang dibuka-tutup secara keras atau berulang.
+   - Bunyi dering atau notifikasi telepon seluler bersuara keras.
+   - Suara pemutaran musik/video dari laptop mahasiswa tanpa penyuara telinga (*headset*).
+2. **Karakteristik Kelas Non-Berisik (`label = 0`):**
+   - Suasana hening dan tertib saat mahasiswa fokus mengetik kode (*coding / debugging*).
    - Suasana tenang saat pelaksanaan kuis atau ujian kompetensi praktikum.
-   - Bunyi ketukan kibor (*keyboard typing*) dan klik tetikus (*mouse*) dalam batas wajar.
-   - Hembusan pendingin ruangan (*AC*) dan dengung kipas prosesor server/PC lab dalam batas desibel normal.
-   - Percakapan atau bisikan pelan sesaat yang tidak mengganggu ketenangan ruangan.
+   - Bunyi ketukan kibor (*typing*) dan klik tetikus (*mouse*) dalam batas normal.
+   - Suara hembusan pendingin ruangan (*AC*) dan dengung kipas prosesor server/PC lab dalam batas desibel wajar.
+   - Percakapan atau bisikan lirih sesaat yang tidak mengganggu ketenangan ruangan.
 
 ---
 
 ## 2. Digitalisasi Sinyal & Teorema Nyquist-Shannon
-Sebelum dapat diproses oleh algoritma komputasi, gelombang akustik kontinu (analog) harus dikonversi ke dalam deret data diskrit temporal melalui proses digitalisasi. Pustaka audio standar Python `librosa` digunakan untuk memuat setiap berkas audio secara *single channel* (mono).
+
+Sebelum dapat diolah oleh algoritma machine learning, sinyal gelombang akustik analog kontinu harus diubah menjadi representasi diskrit temporal melalui proses digitalisasi.
 
 ### A. Frekuensi Sampling ($f_s = 22.050\text{ Hz}$)
-Seluruh sinyal audio di-resample secara seragam pada frekuensi sampling:
+Seluruh sinyal audio di-resample secara konsisten pada laju sampling:
 $$f_s = 22.050\text{ Hz}$$
-Artinya, setiap 1 detik durasi audio diwakili oleh $22.050$ titik data amplitudo sinyal diskrit.
+Artinya, setiap 1 detik durasi audio diwakili oleh $22.050$ titik data amplitudo sinyal diskrit float32 mono.
 
 ### B. Validasi Teorema Nyquist-Shannon
-Menurut **Teorema Sampling Nyquist-Shannon**, agar sinyal analog dapat direkonstruksi secara sempurna ke bentuk digital tanpa mengalami distorsi frekuensi (*aliasing*), frekuensi sampling minimal harus dua kali lipat lebih besar dari frekuensi tertinggi yang dikandung oleh sinyal:
+Berdasarkan **Teorema Sampling Nyquist-Shannon**, agar sinyal analog dapat direkonstruksi secara sempurna ke bentuk digital tanpa mengalami distorsi lipatan frekuensi (*aliasing*), frekuensi sampling minimal harus dua kali lipat lebih besar dari komponen frekuensi tertinggi yang dikandung oleh sinyal:
 $$f_{\text{Nyquist}} = \frac{f_s}{2} = \frac{22.050\text{ Hz}}{2} = 11.025\text{ Hz}$$
 
-Pilihan laju sampling $22.050\text{ Hz}$ sangat tepat dan optimal secara ilmiah:
-- Frekuensi fundamental suara manusia berkisar antara $85\text{ Hz}$ hingga $255\text{ Hz}$, dengan frekuensi formant vokal mencapai $\approx 3.500\text{ Hz}$.
-- Komponen desisan frikatif, gesekan benda, dan kebisingan akustik lingkungan umumnya terkonsentrasi pada rentang $500\text{ Hz} - 8.000\text{ Hz}$.
-- Rentang batas Nyquist $11.025\text{ Hz}$ telah mencakup seluruh komponen energi penting kebisingan manusia dan mesin secara utuh, sekaligus menghemat beban memori komputasi sebesar $\approx 50\%$ dibandingkan laju sampling audio CD standar ($44.100\text{ Hz}$).
+Pilihan laju sampling $22.050\text{ Hz}$ sangat tepat dan efisien:
+- Frekuensi fundamental suara manusia berkisar antara $85\text{ Hz} - 255\text{ Hz}$, dengan frekuensi formant vokal mencapai $\approx 3.500\text{ Hz}$.
+- Komponen desisan frikatif, gesekan benda, dan kebisingan akustik lingkungan laboratorium umumnya terkonsentrasi pada rentang $500\text{ Hz} - 8.000\text{ Hz}$.
+- Rentang Nyquist $11.025\text{ Hz}$ telah mencakup seluruh spektrum energi penting kebisingan manusia dan gesekan perabotan secara utuh, sekaligus menghemat beban memori komputasi sebesar $\approx 50\%$ dibandingkan laju audio CD standar ($44.100\text{ Hz}$).
 
 ---
 
 ## 3. Ekstraksi 16 Fitur Akustik Pengolahan Sinyal Digital (PSD)
+
 Dari setiap potongan jendela audio **4.0 detik** ($N = f_s \times 4 = 88.200\text{ sampel}$), diekstraksi **16 parameter akustik representatif** yang mencakup tiga domain pengolahan sinyal digital:
 
 ```text
@@ -65,92 +72,71 @@ Dari setiap potongan jendela audio **4.0 detik** ($N = f_s \times 4 = 88.200\tex
 ### A. Ranah Waktu (Time Domain)
 
 #### 1. Root Mean Square (RMS) Energy
-RMS mengukur daya fisik rata-rata dan intensitas magnitudo energi gelombang suara pada jendela waktu tertentu:
+RMS mengukur daya fisik rata-rata dan intensitas energi total sinyal pada jendela waktu 4 detik:
 $$\text{RMS} = \sqrt{\frac{1}{N} \sum_{n=1}^{N} |x[n]|^2}$$
 
 Di mana:
-- $N$ adalah jumlah sampel audio per segmen ($88.200$ sampel).
+- $N = 88.200$ sampel per segmen.
 - $x[n]$ adalah nilai amplitudo sinyal diskrit pada sampel ke-$n$.
 
-*Interpretasi Fisis:* Suara gaduh/bising (seperti teriakan, knalpot, dentuman) memiliki lonjakan energi fisik yang menghasilkan nilai RMS jauh lebih tinggi ($0.05 - 0.25$) dibandingkan kondisi ruangan tenang ($0.001 - 0.015$).
+*Interpretasi Fisis:* Suara gaduh/bising di laboratorium (teriakan, tawa, gesekan kursi) memiliki lonjakan energi fisik yang menghasilkan nilai RMS jauh lebih tinggi ($0.05 - 0.25$) dibandingkan kondisi hening tertib ($0.001 - 0.015$).
 
 #### 2. Zero Crossing Rate (ZCR)
-ZCR mengukur laju seberapa sering gelombang sinyal audio melintasi garis sumbu horizontal nol (pergantian tanda dari positif ke negatif atau sebaliknya) per satuan waktu:
-$$\text{ZCR} = \frac{1}{2N} \sum_{n=1}^{N-1} |\text{sgn}(x[n]) - \text{sgn}(x[n-1])|$$
+ZCR mengukur laju seberapa sering gelombang sinyal audio melintasi sumbu horizontal nol (pergantian tanda amplitudo positif ke negatif atau sebaliknya):
+$$\text{ZCR} = \frac{1}{2N} \sum_{n=1}^{N} |\text{sgn}(x[n]) - \text{sgn}(x[n-1])|$$
 
-Di mana fungsi tanda $\text{sgn}(u)$ bernilai:
+Di mana fungsi tanda $\text{sgn}(u)$ didefinisikan sebagai:
 $$\text{sgn}(u) = \begin{cases} 1, & u \ge 0 \\ -1, & u < 0 \end{cases}$$
 
-*Interpretasi Fisis:* ZCR yang tinggi mengindikasikan dominasi derau acak frekuensi tinggi tanpa pola harmonik teratur (*hissing*, gesekan permukaan meja, desisan angin, atau suara kipas angin berputar cepat).
+*Interpretasi Fisis:* ZCR yang tinggi mengindikasikan dominasi derau frekuensi tinggi tanpa pola harmonik teratur (*hissing*, gesekan permukaan meja, desisan angin, atau putaran kipas PC).
 
 ---
 
 ### B. Ranah Frekuensi (Frequency Domain)
 
-#### 3. Spectral Centroid (Hz)
-Spectral Centroid menunjukkan titik berat (*center of gravity*) atau pusat massa frekuensi dari spektrum daya audio. Fitur ini dihitung melalui transformasi Fourier (STFT):
+#### 3. Spectral Centroid ($f_c$)
+Spectral Centroid menunjukkan titik berat (*center of gravity*) atau pusat massa frekuensi dari spektrum daya audio yang diperoleh melalui transformasi Fourier (STFT):
 $$f_c = \frac{\sum_{k=0}^{K-1} f[k] \cdot |X[k]|}{\sum_{k=0}^{K-1} |X[k]|}$$
 
 Di mana:
 - $f[k]$ adalah frekuensi pusat pada bin frekuensi ke-$k$.
-- $|X[k]|$ adalah magnitudo spektrum hasil transformasi Fourier pada bin ke-$k$.
+- $|X[k]|$ adalah magnitudo spektral hasil transformasi Fourier pada bin ke-$k$.
 - $K$ adalah jumlah total bin frekuensi.
 
-*Interpretasi Fisis:* Spectral Centroid merepresentasikan tingkat "kecerahan" (*brightness*) dan ketajaman suara. Suara bising berfrekuensi tinggi (gesekan logam, decitan, vokal teriak) memiliki Centroid tinggi ($> 2.000\text{ Hz}$), sedangkan suara ruangan tenang atau dengung rendah memiliki Centroid jauh lebih rendah ($< 1.200\text{ Hz}$).
+*Interpretasi Fisis:* Spectral Centroid mencerminkan tingkat "kecerahan" (*brightness*) dan ketajaman suara. Suara bising berfrekuensi tinggi (decitan kursi, suara tawa tinggi) memiliki Centroid tinggi ($> 2.000\text{ Hz}$), sedangkan suara ruangan hening atau dengung AC rendah memiliki Centroid jauh lebih rendah ($< 1.500\text{ Hz}$).
 
 ---
 
 ### C. Ranah Psikoakustik Mel (Mel-Frequency Cepstral Coefficients / MFCC)
 
-#### 4–16. Koefisien MFCC 1 hingga 13
-Telinga manusia tidak merespons frekuensi secara linear, melainkan secara logaritmik—telinga jauh lebih peka membedakan perubahan nada pada frekuensi rendah ($< 1.000\text{ Hz}$) dibandingkan pada frekuensi tinggi. Oleh karena itu, MFCC menggunakan pemetaan ke **Skala Mel**:
-$$m = 2595 \log_{10}\left(1 + \frac{f}{700}\right)$$
+Skala Mel memetakan frekuensi akustik fisik ($f$ dalam Hz) ke dalam skala persepsi auditori telinga manusia ($m$ dalam Mel):
+$$m = 2595 \cdot \log_{10}\left(1 + \frac{f}{700}\right)$$
 
-Tahapan komputasi 13 koefisien MFCC mencakup:
-1. Menghitung magnitudo spektrum daya melalui *Short-Time Fourier Transform* (STFT).
-2. Memetakan spektrum daya ke dalam bank filter segitiga Mel (*Mel-filterbank*).
-3. Mengambil nilai logaritma dari energi pada masing-masing pita filter Mel.
-4. Mendekorasikan korelasi energi antar-filter menggunakan *Discrete Cosine Transform* (DCT):
-   $$c_n = \sum_{m=1}^{M} \log(S_m) \cos\left( \frac{\pi n (m - 0.5)}{M} \right), \quad n = 1, 2, \dots, 13$$
-5. Menghitung rata-rata nilai koefisien pada jendela 4 detik untuk memperoleh vektor statis 13 dimensi.
+Setelah sinyal audio dilewatkan ke deretan bank filter Mel (*Mel filterbank*) dan dihitung logaritmanya, diterapkan Transformasi Kosinus Diskrit (*Discrete Cosine Transform* / DCT) untuk menghasilkan 13 koefisien MFCC:
+$$C_k = \sum_{m=1}^{M} \log(S[m]) \cos\left( \frac{\pi \cdot k \cdot (m - 0.5)}{M} \right), \quad k \in [1, \dots, 13]$$
 
-*Interpretasi Fisis Tiap Koefisien:*
-- **MFCC 1:** Menggambarkan kontur selubung daya energi keseluruhan sinyal suara (*overall acoustic energy level*).
-- **MFCC 2–13:** Merepresentasikan bentuk selubung spektral (*spectral envelope*) dan warna suara unik (*timbre*). Koefisien ini menjadi pembeda utama antara suara vokal manusia, dengungan motor, deru knalpot, hembusan AC, atau ketukan instrumen.
+#### 4. MFCC 1 (`mfcc_1`) — Kontur Energi Spektral Utama
+Koefisien pertama mewakili magnitudo selubung daya spektral keseluruhan pada skala Mel. Nilainya berkorelasi erat dengan kenyaringan suara secara persepsi auditori manusia.
+
+#### 5–16. MFCC 2 hingga 13 (`mfcc_2` s/d `mfcc_13`) — Amplop Tekstur & Timbre
+Koefisien ke-2 hingga ke-13 menangkap formasi puncak-lembah (*spectral envelope*) yang membedakan warna suara (*timbre*), seperti perbedaan antara suara vokal percakapan manusia, derau kipas angin, hentakan langkah kaki, dan gesekan perabotan lab.
 
 ---
 
-## 4. Karakteristik Dataset Fitur (`audio_features_4s.csv`)
-Setelah seluruh berkas MP3 diekstraksi melalui proses segmentasi jendela geser 4.0 detik dan pergeseran hop 1.0 detik, dataset disimpan dalam format tabular CSV ([`audio_features_4s.csv`](../../data/klasifikasi-audio/audio_features_4s.csv)).
+## 4. Analisis Sebaran Data & Nilai Ambang Akustik
 
-```text
-Struktur Matriks Data: 5.286 Baris x 20 Kolom
-├── Kolom Meta: segment_idx, file_name, label_name, label (4 kolom)
-└── Kolom Fitur Akustik: rms, spectral_centroid, zcr, mfcc_1 s/d mfcc_13 (16 kolom)
-```
+Pemeriksaan statistik terhadap berkas fitur hasil ekstraksi (`audio_features_4s.csv`, $5.286$ segmen) menghasilkan temuan penting:
 
-### Proporsi Distribusi Kelas
-Dataset hasil segmentasi memiliki keseimbangan kelas (*class balance*) yang sangat ideal:
-- **Kelas Non-Berisik (`label = 0`):** **2.732 segmen** ($51.68\%$)
-- **Kelas Berisik (`label = 1`):** **2.554 segmen** ($48.32\%$)
-- **Total Keseluruhan:** **5.286 segmen audio nyata**
+| Parameter Fitur | Rata-rata Non-Berisik | Median Non-Berisik | Rata-rata Berisik | Median Berisik |
+|---|:---:|:---:|:---:|:---:|
+| **RMS Energy** | $0.0298$ | $0.0181$ | $0.0965$ | $0.0820$ |
+| **Spectral Centroid (Hz)** | $1.643\text{ Hz}$ | $1.509\text{ Hz}$ | $1.854\text{ Hz}$ | $1.694\text{ Hz}$ |
+| **Zero Crossing Rate (ZCR)**| $0.0768$ | $0.0694$ | $0.0911$ | $0.0858$ |
 
-Keseimbangan proporsi ini memastikan bahwa model tidak akan mengalami bias prediktif (*majority class bias*) selama proses pelatihan.
-
----
-
-## 5. Analisis Data Eksploratif (EDA) & Distribusi Fitur
-Berdasarkan analisis statistik pada `train.ipynb`, ditemukan pemisahan distribusi (*separability*) yang sangat jelas antara kelas Berisik dan Non-Berisik pada fitur-fitur utama:
-
-| Parameter Fitur | Kategori | Rata-Rata (*Mean*) | Standar Deviasi (*Std*) | Rentang Nilai (Min – Max) |
-|---|---|---|---|---|
-| **RMS Energy** | Non-Berisik (0)<br>Berisik (1) | **0.0078**<br>**0.0924** | 0.0062<br>0.0618 | 0.0001 – 0.0482<br>0.0150 – 0.4421 |
-| **Spectral Centroid (Hz)** | Non-Berisik (0)<br>Berisik (1) | **1.245,6 Hz**<br>**2.188,4 Hz** | 412,8 Hz<br>684,2 Hz | 312,4 – 3.240,1 Hz<br>645,8 – 5.820,6 Hz |
-| **Zero Crossing Rate** | Non-Berisik (0)<br>Berisik (1) | **0.0481**<br>**0.0986** | 0.0245<br>0.0412 | 0.0084 – 0.1782<br>0.0215 – 0.3814 |
-| **MFCC 1 (Energi)** | Non-Berisik (0)<br>Berisik (1) | **-284.12**<br>**-92.45** | 68.45<br>42.18 | -480.12 s/d -140.21<br>-180.34 s/d 12.45 |
-
-### Wawasan (*Insights*) Penting dari EDA:
-1. **Daya Pemisah RMS yang Sangat Kuat:** Rata-rata RMS pada kondisi berisik ($0.0924$) bernilai hampir **12 kali lipat lebih tinggi** dibandingkan kondisi non-berisik ($0.0078$). Fitur ini menjadi pemisah utama pada tingkat energi sinyal dasar.
-2. **Pergeseran Spektrum Frekuensi Tinggi pada Kebisingan:** Rata-rata Spectral Centroid kelas berisik melompat ke angka $2.188,4\text{ Hz}$, menandakan adanya konsentrasi energi pada frekuensi yang lebih tajam dan bising, sedangkan suara hening terpusat pada frekuensi rendah ($1.245,6\text{ Hz}$).
-3. **Peningkatan Densitas Pelintasan Nol (ZCR):** Nilai ZCR pada kelas berisik berlipat ganda, mengonfirmasi keberadaan desisan dan fluktuasi acak non-periodik dari derau lingkungan sekitar.
-4. **Alasan Memilih 16 Fitur (Menghindari *Curse of Dimensionality*):** Eksperimen pada *notebook* menunjukkan bahwa mengekstraksi 16 fitur esensial ini jauh lebih akurat dan stabil dibandingkan mengekstrak 51+ fitur berlebih (seperti *spectral roll-off*, *spectral contrast*, *chroma*, dll.) yang justru menurunkan akurasi akibat redundansi informasi dan korelasi multikolinearitas yang tinggi.
+### Temuan Ambang Batas Mikrofon (*Acoustic Threshold Insights*):
+1. **Ambang Batas Hening Dasar (`DEFAULT_SILENCE_RMS = 0.015`):**
+   Pada mikrofon laptop/PC biasa di ruangan tertutup, desis kipas pendingin dan derau statis ruangan umumnya memiliki RMS antara $0.008$ hingga $0.015$. Oleh karena itu, ambang hening default backend disetel pada **`0.015` RMS**, sehingga desis kipas tidak keliru dideteksi sebagai suara bising aktif.
+2. **Karakteristik Data Suara Bersih Bervolume Tinggi:**
+   Sebanyak 243 sampel non-berisik pada dataset memiliki nilai $\text{RMS} \ge 0.075$ (misalnya saat asisten lab menjelaskan materi dengan suara lantang). Hal ini membuktikan bahwa klasifikasi kebisingan tidak boleh hanya mengandalkan batas keras RMS, melainkan harus dinilai secara komprehensif oleh model WKNN menggunakan kombinasi seluruh 16 fitur spektral.
+3. **Ambang Batas Saturasi Keras (`EXTREME_NOISE_RMS = 0.220`):**
+   Batas pengaman keras hanya diterapkan pada suara sangat ekstrem di atas $0.220$ RMS (hampir menyentuh batas clipping digital 1.0) untuk memastikan suara benturan keras langsung terdeteksi.
