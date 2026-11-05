@@ -10,6 +10,7 @@ plotly
 librosa
 sounddevice
 soundfile
+websockets
 
 # Data Processing & Machine Learning
 numpy

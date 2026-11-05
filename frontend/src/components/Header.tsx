@@ -162,20 +162,30 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* PC Lab Link Status Chip in Admin Mode */}
             {role === 'admin' && (
-              <div className={`hidden xl:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${
-                labConnected && labMicReady
-                  ? 'bg-teal-50 text-teal-800 border-teal-200'
-                  : (labConnected
-                    ? 'bg-amber-50 text-amber-800 border-amber-200'
-                    : 'bg-rose-50 text-rose-800 border-rose-200')
-              }`}>
+              <div
+                onClick={() => {
+                  if (!labConnected) {
+                    window.open('/', '_blank');
+                  }
+                }}
+                className={`hidden xl:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                  !labConnected ? 'cursor-pointer hover:bg-rose-100 hover:border-rose-300' : ''
+                } ${
+                  labConnected && labMicReady
+                    ? 'bg-teal-50 text-teal-800 border-teal-200'
+                    : (labConnected
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-rose-50 text-rose-800 border-rose-200')
+                }`}
+                title={!labConnected ? 'Klik untuk membuka layar sensor PC Lab di tab baru' : undefined}
+              >
                 <span className={`w-2 h-2 rounded-full ${
                   labConnected && labMicReady ? 'bg-teal-500 animate-pulse' : (labConnected ? 'bg-amber-500' : 'bg-rose-500')
                 }`} />
                 <span>
                   {labConnected && labMicReady
                     ? 'PC Lab Terhubung'
-                    : (labConnected ? 'PC Lab Siap (Menunggu Sensor)' : 'PC Lab Terputus')}
+                    : (labConnected ? 'PC Lab Siap (Menunggu Sensor)' : 'PC Lab Terputus (Klik Buka Lab)')}
                 </span>
               </div>
             )}

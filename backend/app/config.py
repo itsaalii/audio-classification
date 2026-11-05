@@ -52,5 +52,5 @@ FEATURE_COLUMNS = [
 # Server settings
 PORT = int(os.getenv("PORT", "8080"))
 HOST = os.getenv("HOST", "0.0.0.0")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://localhost:8080").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 

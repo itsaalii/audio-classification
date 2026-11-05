@@ -58,7 +58,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   onLiveChange,
 }) => {
   // =========================================================================
-  // STATE SINKRONISASI RUANGAN (WebSocket Room State)
+  // STATE SINKRONISASI RUANGAN (WebSocket & REST Room State)
   // =========================================================================
   const [roomState, setRoomState] = useState<RoomState>({
     is_monitoring: false,
@@ -122,6 +122,15 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   const totalChunksRef = useRef(0);
   const noisyChunksRef = useRef(0);
   const cleanChunksRef = useRef(0);
+
+  const isKioskActivatedRef = useRef(isKioskActivated);
+  isKioskActivatedRef.current = isKioskActivated;
+
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
+
+  const roomStateRef = useRef(roomState);
+  roomStateRef.current = roomState;
 
   const consistencyDurationRef = useRef(consistencyDuration);
   consistencyDurationRef.current = consistencyDuration;
@@ -195,6 +204,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   // =========================================================================
   const stopMonitoringInternal = useCallback(() => {
     setIsActive(false);
+    isActiveRef.current = false;
     onLiveChangeRef.current?.(false);
     alertPlayer.stop();
 
@@ -237,7 +247,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       onSaveSessionRef.current(session);
     }
 
-    // Kirim telemetri status standby ke Admin via WebSocket
+    // Kirim telemetri status standby ke Admin via WebSocket/REST
     if (role === 'lab') {
       remoteSocket.sendTelemetry({
         timestamp: Date.now(),
@@ -271,79 +281,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   }, [role]);
 
   // =========================================================================
-  // LOGIKA INISIALISASI MIKROFON PC LAB (ONE-CLICK KIOSK GESTURE)
-  // =========================================================================
-  const activateKioskMicrophone = useCallback(async () => {
-    setKioskInitError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      });
-      streamRef.current = stream;
-
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const audioCtx = new AudioCtx();
-      audioContextRef.current = audioCtx;
-
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
-      }
-
-      const sourceNode = audioCtx.createMediaStreamSource(stream);
-
-      // AnalyserNode untuk visualisasi 60 FPS
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0.8;
-      analyserRef.current = analyser;
-      sourceNode.connect(analyser);
-
-      // ScriptProcessorNode untuk resample ke 22.050 Hz ke circular buffer
-      const scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
-      scriptNodeRef.current = scriptNode;
-
-      const nativeSr = audioCtx.sampleRate;
-      const resampleRatio = nativeSr / TARGET_SR;
-
-      scriptNode.onaudioprocess = (e) => {
-        const inputData = e.inputBuffer.getChannelData(0);
-        const outputLength = Math.floor(inputData.length / resampleRatio);
-
-        const circ = circularBufferRef.current;
-        let writeIdx = bufferWriteIdxRef.current;
-
-        for (let i = 0; i < outputLength; i++) {
-          const srcIdx = Math.floor(i * resampleRatio);
-          circ[writeIdx] = inputData[srcIdx] || 0;
-          writeIdx = (writeIdx + 1) % BUFFER_SIZE;
-        }
-        bufferWriteIdxRef.current = writeIdx;
-      };
-
-      // Mute gain ke destination
-      const muteGain = audioCtx.createGain();
-      muteGain.gain.value = 0;
-      sourceNode.connect(scriptNode);
-      scriptNode.connect(muteGain);
-      muteGain.connect(audioCtx.destination);
-
-      setIsKioskActivated(true);
-      remoteSocket.sendMicStatus(true);
-    } catch (err) {
-      console.error('Gagal aktivasi sensor PC Lab:', err);
-      setKioskInitError(`Gagal mengakses mikrofon: ${String(err)}`);
-      remoteSocket.sendMicStatus(false);
-    }
-  }, []);
-
-  // =========================================================================
   // MULAI LOOP DETEKSI LOKAL (PC LAB) SAAT DIPERINTAHKAN ADMIN
   // =========================================================================
   const startMonitoringInternal = useCallback(() => {
@@ -375,9 +312,11 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     bufferWriteIdxRef.current = 0;
 
     setIsActive(true);
+    isActiveRef.current = true;
     onLiveChangeRef.current?.(true);
 
     // Timer durasi sesi berjalan & cooldown alarm
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     timerIntervalRef.current = window.setInterval(() => {
       sessionSecondsRef.current += 1;
       setSessionSeconds(sessionSecondsRef.current);
@@ -392,6 +331,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     }, 1000);
 
     // Loop Prediksi Real-Time setiap 1000 ms
+    if (predictIntervalRef.current) clearInterval(predictIntervalRef.current);
     predictIntervalRef.current = window.setInterval(async () => {
       if (isPredictingRef.current) return;
       isPredictingRef.current = true;
@@ -580,6 +520,91 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   }, []);
 
   // =========================================================================
+  // LOGIKA INISIALISASI MIKROFON PC LAB (ONE-CLICK KIOSK GESTURE)
+  // =========================================================================
+  const activateKioskMicrophone = useCallback(async () => {
+    setKioskInitError(null);
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error(
+          'navigator.mediaDevices.getUserMedia tidak tersedia. Pastikan membuka aplikasi melalui HTTPS atau localhost.'
+        );
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
+      streamRef.current = stream;
+
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+
+      const sourceNode = audioCtx.createMediaStreamSource(stream);
+
+      // AnalyserNode untuk visualisasi 60 FPS
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.8;
+      analyserRef.current = analyser;
+      sourceNode.connect(analyser);
+
+      // ScriptProcessorNode untuk resample ke 22.050 Hz ke circular buffer
+      const scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+      scriptNodeRef.current = scriptNode;
+
+      const nativeSr = audioCtx.sampleRate;
+      const resampleRatio = nativeSr / TARGET_SR;
+
+      scriptNode.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0);
+        const outputLength = Math.floor(inputData.length / resampleRatio);
+
+        const circ = circularBufferRef.current;
+        let writeIdx = bufferWriteIdxRef.current;
+
+        for (let i = 0; i < outputLength; i++) {
+          const srcIdx = Math.floor(i * resampleRatio);
+          circ[writeIdx] = inputData[srcIdx] || 0;
+          writeIdx = (writeIdx + 1) % BUFFER_SIZE;
+        }
+        bufferWriteIdxRef.current = writeIdx;
+      };
+
+      // Mute gain ke destination
+      const muteGain = audioCtx.createGain();
+      muteGain.gain.value = 0;
+      sourceNode.connect(scriptNode);
+      scriptNode.connect(muteGain);
+      muteGain.connect(audioCtx.destination);
+
+      setIsKioskActivated(true);
+      isKioskActivatedRef.current = true;
+      remoteSocket.sendMicStatus(true);
+
+      // Jika Admin sudah mengaktifkan monitoring sebelumnya, langsung mulai deteksi!
+      if (roomStateRef.current.is_monitoring && !isActiveRef.current) {
+        startMonitoringInternal();
+      }
+    } catch (err) {
+      console.error('Gagal aktivasi sensor PC Lab:', err);
+      setKioskInitError(`Gagal mengakses mikrofon: ${String(err)}`);
+      remoteSocket.sendMicStatus(false);
+    }
+  }, [startMonitoringInternal]);
+
+  // =========================================================================
   // KONEKSI WEBSOCKET & PENANGANAN COMMAND DARI ADMIN
   // =========================================================================
   useEffect(() => {
@@ -592,6 +617,13 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
         setConsistencyDuration(st.tolerance_seconds);
       }
       setAlarmEnabled(st.alarm_enabled);
+      if (role === 'admin') {
+        setIsActive(st.is_monitoring);
+      } else if (role === 'lab') {
+        if (st.is_monitoring && isKioskActivatedRef.current && !isActiveRef.current) {
+          startMonitoringInternal();
+        }
+      }
     }).catch(() => {});
 
     // Subscribe ke sinkronisasi state ruangan
@@ -631,6 +663,13 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           if (st.latest_telemetry.recent_timeline) {
             timelineDataRef.current = st.latest_telemetry.recent_timeline;
           }
+        }
+      } else if (role === 'lab') {
+        // Otomatis sinkronkan monitoring jika Admin menyalakan/mematikan
+        if (st.is_monitoring && isKioskActivatedRef.current && !isActiveRef.current) {
+          startMonitoringInternal();
+        } else if (!st.is_monitoring && isActiveRef.current) {
+          stopMonitoringInternal();
         }
       }
     });
@@ -682,7 +721,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     const unsubCommand = remoteSocket.onCommand((cmd: RemoteCommand) => {
       if (role === 'lab') {
         if (cmd.action === 'START_MONITORING') {
-          startMonitoringInternal();
+          if (isKioskActivatedRef.current) {
+            startMonitoringInternal();
+          }
         } else if (cmd.action === 'STOP_MONITORING') {
           stopMonitoringInternal();
         } else if (cmd.action === 'UPDATE_CONFIG') {
@@ -714,39 +755,35 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   // ACTIONS YANG DIPICU DARI ADMIN
   // =========================================================================
   const handleAdminStartMonitoring = () => {
+    setIsActive(true);
     remoteSocket.sendCommand('START_MONITORING');
-    remoteSocket.postCommand('START_MONITORING').catch(() => {});
   };
 
   const handleAdminStopMonitoring = () => {
+    setIsActive(false);
     remoteSocket.sendCommand('STOP_MONITORING');
-    remoteSocket.postCommand('STOP_MONITORING').catch(() => {});
   };
 
   const handleAdminSetTolerance = (dur: number) => {
     setConsistencyDuration(dur);
     setIsDropdownOpen(false);
     remoteSocket.sendCommand('UPDATE_CONFIG', { tolerance_seconds: dur });
-    remoteSocket.postCommand('UPDATE_CONFIG', { tolerance_seconds: dur }).catch(() => {});
   };
 
   const handleAdminToggleAlarm = () => {
     const next = !alarmEnabled;
     setAlarmEnabled(next);
     remoteSocket.sendCommand('UPDATE_CONFIG', { alarm_enabled: next });
-    remoteSocket.postCommand('UPDATE_CONFIG', { alarm_enabled: next }).catch(() => {});
   };
 
   const handleAdminResetBuffer = () => {
     remoteSocket.sendCommand('RESET_BUFFER');
-    remoteSocket.postCommand('RESET_BUFFER').catch(() => {});
     setWindowNoisySeconds(0);
     setWindowTotalSeconds(0);
   };
 
   const handleAdminTestAlarm = () => {
     remoteSocket.sendCommand('TRIGGER_TEST_ALARM');
-    remoteSocket.postCommand('TRIGGER_TEST_ALARM').catch(() => {});
   };
 
   // Kalibrasi baseline RMS ruangan (3 detik)
@@ -949,7 +986,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               ctx.fillRect(x, y, barWidth, barHeight);
             }
           } else if (role === 'admin' && isActive && currentResultRef.current) {
-            // Reconstruct spektrum dari fitur MFCC & Centroid PC Lab
             const mfccs = currentResultRef.current.mfccs || [];
             const rms = currentResultRef.current.rms || 0.02;
             for (let i = 0; i < numBars; i++) {
@@ -962,7 +998,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               ctx.fillRect(x, y, barWidth, barHeight);
             }
           } else {
-            // Idle bars
             for (let i = 0; i < numBars; i++) {
               const x = i * (barWidth + 2);
               ctx.fillStyle = '#F1F5F9';
@@ -982,7 +1017,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, w, h);
 
-          // Garis ambang bahaya (70% probabilitas)
           const dangerY = h - 0.7 * h;
           ctx.strokeStyle = '#FECDD3';
           ctx.setLineDash([4, 4]);
@@ -1007,14 +1041,12 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             });
             ctx.stroke();
 
-            // Area bawah
             ctx.lineTo((pts.length - 1) * xStep, h);
             ctx.lineTo(0, h);
             ctx.closePath();
             ctx.fillStyle = 'rgba(13, 148, 136, 0.10)';
             ctx.fill();
 
-            // Titik kursor
             const lastIdx = pts.length - 1;
             const lastX = lastIdx * xStep;
             const lastY = h - (pts[lastIdx].noiseProb / 100) * h;
@@ -1119,7 +1151,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 <HeroIcon name="adjustments" className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 flex-wrap">
                   <h3 className="text-base font-extrabold text-slate-800 tracking-tight">
                     Remote Control Bar — Kendali PC Lab
                   </h3>
@@ -1143,12 +1175,25 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                         ? 'PC Lab Terhubung (Mikrofon Siaga)'
                         : roomState.lab_client_connected
                         ? 'PC Lab Terhubung (Mikrofon Belum Diaktifkan di Lab)'
-                        : 'PC Lab Terputus (Buka Layar /lab)'}
+                        : 'PC Lab Terputus (Belum Dibuka)'}
                     </span>
                   </span>
+
+                  {/* Tombol Cepat Buka Layar PC Lab di Tab Baru */}
+                  {!roomState.lab_client_connected && (
+                    <button
+                      type="button"
+                      onClick={() => window.open('/', '_blank')}
+                      className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-colors shadow-2xs"
+                      title="Buka antarmuka sensor PC Lab di jendela/tab baru"
+                    >
+                      <HeroIcon name="computer-desktop" className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Buka Layar PC Lab (Tab Baru)</span>
+                    </button>
+                  )}
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Perintah Start/Stop, perubahan durasi toleransi, dan pemicuan alarm akan diterapkan seketika pada PC Lab.
+                <p className="text-xs text-slate-500 mt-1">
+                  Perintah Start/Stop, perubahan durasi toleransi, dan pemicuan alarm akan langsung disinkronkan ke PC Lab.
                 </p>
               </div>
             </div>
@@ -1166,19 +1211,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               ) : (
                 <button
                   onClick={handleAdminStartMonitoring}
-                  disabled={!roomState.lab_client_connected || !roomState.lab_mic_ready}
-                  className={`py-2.5 px-5 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-sm flex items-center gap-2 ${
-                    roomState.lab_client_connected && roomState.lab_mic_ready
-                      ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
-                      : 'bg-slate-300 cursor-not-allowed text-slate-500'
-                  }`}
-                  title={
-                    !roomState.lab_client_connected
-                      ? 'Harap buka antarmuka PC Lab terlebih dahulu'
-                      : !roomState.lab_mic_ready
-                      ? 'Mikrofon belum diaktifkan di PC Lab'
-                      : 'Mulai pemantauan suara di PC Lab'
-                  }
+                  className="py-2.5 px-5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs tracking-wide transition-all shadow-sm shadow-teal-600/20 flex items-center gap-2"
+                  title="Mulai pemantauan audio ruang lab secara jarak jauh"
                 >
                   <HeroIcon name="play" className="w-4 h-4" />
                   <span>Mulai Deteksi Ruang Lab</span>
@@ -1186,6 +1220,30 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               )}
             </div>
           </div>
+
+          {/* Notifikasi Siaga jika deteksi aktif namun PC Lab belum siap */}
+          {isActive && (!roomState.lab_client_connected || !roomState.lab_mic_ready) && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-3 animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <HeroIcon name="exclamation-triangle" className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>
+                  <strong>Deteksi Jarak Jauh Diaktifkan:</strong>{' '}
+                  {!roomState.lab_client_connected
+                    ? 'Menunggu antarmuka PC Lab dibuka pada komputer laboratorium. Buka rute / atau /lab untuk mulai mendeteksi.'
+                    : 'PC Lab telah terhubung, menunggu operator menekan "Aktifkan Sensor" pada layar PC Lab.'}
+                </span>
+              </div>
+              {!roomState.lab_client_connected && (
+                <button
+                  type="button"
+                  onClick={() => window.open('/', '_blank')}
+                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs whitespace-nowrap shadow-xs"
+                >
+                  Buka PC Lab Sekarang
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Baris Kustomisasi Parameter Jarak Jauh */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
@@ -1300,8 +1358,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               <button
                 type="button"
                 onClick={handleAdminTestAlarm}
-                disabled={!roomState.lab_client_connected}
-                className="w-full py-1.5 px-3 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs font-semibold text-teal-800 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                className="w-full py-1.5 px-3 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs font-semibold text-teal-800 transition-colors flex items-center justify-center gap-1.5"
                 title="Membunyikan alarm 3 detik di speaker PC Lab"
               >
                 <HeroIcon name="volume-up" className="w-3.5 h-3.5 text-teal-600" />
@@ -1501,7 +1558,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Server WebSocket:</span>
+                      <span className="text-slate-500">Koneksi Server:</span>
                       <span className="font-semibold text-teal-700 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
                         <span>Terhubung</span>
@@ -1514,13 +1571,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 <>
                   <button
                     onClick={isActive ? handleAdminStopMonitoring : handleAdminStartMonitoring}
-                    disabled={!roomState.lab_client_connected || !roomState.lab_mic_ready}
                     className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm tracking-wide transition-all shadow-sm flex items-center justify-center gap-2.5 ${
                       isActive
                         ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
-                        : roomState.lab_client_connected && roomState.lab_mic_ready
-                        ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
-                        : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                        : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
                     }`}
                   >
                     <HeroIcon name={isActive ? 'stop' : 'play'} className="w-5 h-5 text-white" />

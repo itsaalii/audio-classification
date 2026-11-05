@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Any, Optional
 from fastapi import WebSocket
 
@@ -14,6 +15,7 @@ class RoomStateManager:
         self.lab_client_connected: bool = False
         self.lab_mic_ready: bool = False
         self.latest_telemetry: Optional[dict[str, Any]] = None
+        self.last_lab_heartbeat: float = 0.0
 
         self.lab_connections: set[WebSocket] = set()
         self.admin_connections: set[WebSocket] = set()
@@ -21,7 +23,8 @@ class RoomStateManager:
 
     def get_state_dict(self) -> dict[str, Any]:
         """Snapshot representasi JSON dari state ruangan saat ini."""
-        lab_connected = len(self.lab_connections) > 0
+        recent_heartbeat = (time.time() - self.last_lab_heartbeat) < 15.0
+        lab_connected = len(self.lab_connections) > 0 or recent_heartbeat
         return {
             "is_monitoring": self.is_monitoring,
             "tolerance_seconds": self.tolerance_seconds,
@@ -68,6 +71,7 @@ class RoomStateManager:
             if role == "lab":
                 self.lab_connections.add(ws)
                 self.lab_client_connected = True
+                self.last_lab_heartbeat = time.time()
             else:
                 self.admin_connections.add(ws)
 
@@ -83,6 +87,7 @@ class RoomStateManager:
                     self.lab_client_connected = False
                     self.lab_mic_ready = False
                     self.is_monitoring = False
+                    self.last_lab_heartbeat = 0.0
             else:
                 self.admin_connections.discard(ws)
 
@@ -93,6 +98,8 @@ class RoomStateManager:
         """Perbarui status izin & inisialisasi mikrofon PC Lab."""
         async with self._lock:
             self.lab_mic_ready = ready
+            if ready:
+                self.last_lab_heartbeat = time.time()
         await self.broadcast_state()
 
     async def update_telemetry(self, telemetry_data: dict[str, Any]):
@@ -101,13 +108,12 @@ class RoomStateManager:
         secara real-time (sub-detik).
         """
         self.latest_telemetry = telemetry_data
+        self.last_lab_heartbeat = time.time()
         msg = {
             "type": "TELEMETRY_UPDATE",
             "data": telemetry_data
         }
         await self.broadcast_to_set(self.admin_connections, msg)
-        # Juga kirim balik ke lab jika diperlukan sinkronisasi state
-        await self.broadcast_to_set(self.lab_connections, msg)
 
     async def execute_command(self, action: str, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
@@ -156,6 +162,12 @@ class RoomStateManager:
 
             elif action == "TRIGGER_TEST_ALARM":
                 await self.broadcast_to_set(self.lab_connections, cmd_for_lab)
+
+            elif action == "SET_MIC_STATUS":
+                if params and "ready" in params:
+                    self.lab_mic_ready = bool(params["ready"])
+                    if self.lab_mic_ready:
+                        self.last_lab_heartbeat = time.time()
 
         await self.broadcast_state()
         return self.get_state_dict()

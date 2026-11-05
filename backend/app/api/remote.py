@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Request, HTTPException
 from backend.app.schemas import RemoteCommandRequest, RoomStateResponse
 from backend.app.services.room_manager import RoomStateManager
@@ -28,10 +28,20 @@ async def post_remote_command(request: Request, body: RemoteCommandRequest):
     - UPDATE_CONFIG
     - RESET_BUFFER
     - TRIGGER_TEST_ALARM
+    - SET_MIC_STATUS
     """
     manager = get_room_manager(request)
     updated_state = await manager.execute_command(body.action, body.params)
     return updated_state
+
+@router.post("/remote/telemetry")
+async def post_remote_telemetry(request: Request, body: dict[str, Any]):
+    """
+    Menerima payload telemetri periodik dari PC Lab (fallback HTTP selain WebSocket).
+    """
+    manager = get_room_manager(request)
+    await manager.update_telemetry(body)
+    return {"status": "ok"}
 
 @router.websocket("/ws/room")
 async def websocket_room_endpoint(
@@ -65,7 +75,7 @@ async def websocket_room_endpoint(
                 telemetry = data.get("data", {})
                 await manager.update_telemetry(telemetry)
 
-            elif msg_type == "ADMIN_COMMAND":
+            elif msg_type in ["ADMIN_COMMAND", "COMMAND"]:
                 # Perintah dikirim lewat WebSocket oleh Admin
                 action = data.get("action")
                 params = data.get("params")
@@ -73,6 +83,9 @@ async def websocket_room_endpoint(
                     await manager.execute_command(action, params)
 
             elif msg_type == "PING":
+                if role == "lab":
+                    import time
+                    manager.last_lab_heartbeat = time.time()
                 await websocket.send_json({"type": "PONG"})
 
     except WebSocketDisconnect:
@@ -81,4 +94,3 @@ async def websocket_room_endpoint(
         pass
     finally:
         await manager.disconnect_client(websocket, role)
-
