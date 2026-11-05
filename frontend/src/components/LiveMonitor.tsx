@@ -413,8 +413,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             targetDuration === 1
               ? 1
               : targetDuration === 4
-              ? 3
-              : Math.ceil(targetDuration * 0.8);
+                ? 3
+                : Math.ceil(targetDuration * 0.8);
 
           isConsistent = currentWindowLen >= targetDuration && currentNoisyCount >= minReq;
 
@@ -469,8 +469,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           targetDuration === 1
             ? 1
             : targetDuration === 4
-            ? 3
-            : Math.ceil(targetDuration * 0.8);
+              ? 3
+              : Math.ceil(targetDuration * 0.8);
 
         const progressPct =
           minRequiredNoisy > 0
@@ -624,7 +624,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           startMonitoringInternal();
         }
       }
-    }).catch(() => {});
+    }).catch(() => { });
 
     // Subscribe ke sinkronisasi state ruangan
     const unsubState = remoteSocket.onStateSync((st) => {
@@ -820,7 +820,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       setTimeout(() => {
         clearInterval(interval);
         stream.getTracks().forEach((t) => t.stop());
-        ctx.close().catch(() => {});
+        ctx.close().catch(() => { });
 
         const calculated = count > 0 ? sumRms / count : 0.015;
         const clamped = Math.max(0.005, Math.min(0.05, calculated));
@@ -1092,8 +1092,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     consistencyDuration === 1
       ? 1
       : consistencyDuration === 4
-      ? 3
-      : Math.ceil(consistencyDuration * 0.8);
+        ? 3
+        : Math.ceil(consistencyDuration * 0.8);
 
   const progressPct =
     minRequiredNoisy > 0
@@ -1117,7 +1117,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   Aktifkan Sensor Audio PC Lab
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                  Sesuai kebijakan keamanan browser, sensor mikrofon wajib diinisialisasi melalui 1 interaksi klik. 
+                  Sesuai kebijakan keamanan browser, sensor mikrofon wajib diinisialisasi melalui 1 interaksi klik.
                   Setelah diaktifkan, deteksi audio dan alarm 3 detik akan dikomandoi sepenuhnya secara jarak jauh oleh Admin dari antarmuka <span className="font-mono font-semibold text-teal-800">/admin</span>.
                 </p>
                 {kioskInitError && (
@@ -1156,26 +1156,24 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                     Remote Control Bar — Kendali PC Lab
                   </h3>
                   {/* Status PC Lab */}
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                    roomState.lab_client_connected && roomState.lab_mic_ready
-                      ? 'bg-teal-50 text-teal-800 border-teal-200'
-                      : roomState.lab_client_connected
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${roomState.lab_client_connected && roomState.lab_mic_ready
+                    ? 'bg-teal-50 text-teal-800 border-teal-200'
+                    : roomState.lab_client_connected
                       ? 'bg-amber-50 text-amber-800 border-amber-200'
                       : 'bg-rose-50 text-rose-800 border-rose-200'
-                  }`}>
-                    <span className={`w-2 h-2 rounded-full ${
-                      roomState.lab_client_connected && roomState.lab_mic_ready
-                        ? 'bg-teal-500 animate-pulse'
-                        : roomState.lab_client_connected
+                    }`}>
+                    <span className={`w-2 h-2 rounded-full ${roomState.lab_client_connected && roomState.lab_mic_ready
+                      ? 'bg-teal-500 animate-pulse'
+                      : roomState.lab_client_connected
                         ? 'bg-amber-500'
                         : 'bg-rose-500'
-                    }`} />
+                      }`} />
                     <span>
                       {roomState.lab_client_connected && roomState.lab_mic_ready
                         ? 'PC Lab Terhubung (Mikrofon Siaga)'
                         : roomState.lab_client_connected
-                        ? 'PC Lab Terhubung (Mikrofon Belum Diaktifkan di Lab)'
-                        : 'PC Lab Terputus (Belum Dibuka)'}
+                          ? 'PC Lab Terhubung (Mikrofon Belum Diaktifkan di Lab)'
+                          : 'PC Lab Terputus (Belum Dibuka)'}
                     </span>
                   </span>
 
@@ -1267,11 +1265,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                       <button
                         key={opt.val}
                         onClick={() => handleAdminSetTolerance(opt.val)}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
-                          consistencyDuration === opt.val
-                            ? 'bg-teal-50 text-teal-800'
-                            : 'text-slate-700 hover:bg-slate-100'
-                        }`}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${consistencyDuration === opt.val
+                          ? 'bg-teal-50 text-teal-800'
+                          : 'text-slate-700 hover:bg-slate-100'
+                          }`}
                       >
                         <span>{opt.label}</span>
                         <span className="text-[10px] font-mono text-slate-400">
@@ -1293,11 +1290,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 <button
                   type="button"
                   onClick={handleAdminToggleAlarm}
-                  className={`px-2.5 py-0.5 rounded text-xs font-bold border transition-colors flex items-center gap-1 ${
-                    alarmEnabled
-                      ? 'bg-teal-50 border-teal-200 text-teal-800 hover:bg-teal-100'
-                      : 'bg-slate-200 border-slate-300 text-slate-600 hover:bg-slate-300'
-                  }`}
+                  className={`px-2.5 py-0.5 rounded text-xs font-bold border transition-colors flex items-center gap-1 ${alarmEnabled
+                    ? 'bg-teal-50 border-teal-200 text-teal-800 hover:bg-teal-100'
+                    : 'bg-slate-200 border-slate-300 text-slate-600 hover:bg-slate-300'
+                    }`}
                 >
                   <HeroIcon name={alarmEnabled ? 'bell' : 'bell-slash'} className="w-3.5 h-3.5" />
                   <span>{alarmEnabled ? 'Aktif' : 'Nonaktif'}</span>
@@ -1311,11 +1307,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                       key={s}
                       type="button"
                       onClick={() => setBeepDuration(s)}
-                      className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${
-                        beepDuration === s
-                          ? 'bg-teal-600 text-white'
-                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                      }`}
+                      className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${beepDuration === s
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                        }`}
                     >
                       {s}s
                     </button>
@@ -1378,25 +1373,23 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           <div className="flex flex-col justify-center">
             {/* Status Pill Badge */}
             <div
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider mb-3 w-fit border transition-colors ${
-                !isActive
-                  ? 'bg-slate-100 text-slate-600 border-slate-200'
-                  : isNoisy
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider mb-3 w-fit border transition-colors ${!isActive
+                ? 'bg-slate-100 text-slate-600 border-slate-200'
+                : isNoisy
                   ? 'bg-rose-50 text-rose-800 border-rose-200 animate-pulse'
                   : 'bg-teal-50 text-teal-800 border-teal-200'
-              }`}
+                }`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${
-                  !isActive ? 'bg-slate-400' : isNoisy ? 'bg-rose-600' : 'bg-teal-500'
-                }`}
+                className={`w-2 h-2 rounded-full ${!isActive ? 'bg-slate-400' : isNoisy ? 'bg-rose-600' : 'bg-teal-500'
+                  }`}
               />
               <span>
                 {!isActive
                   ? 'STANDBY'
                   : isNoisy
-                  ? 'PERINGATAN: BERISIK'
-                  : 'KONDUSIF (NON-BERISIK)'}
+                    ? 'PERINGATAN: BERISIK'
+                    : 'KONDUSIF (NON-BERISIK)'}
               </span>
             </div>
 
@@ -1404,20 +1397,20 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             <h2 className="rt-hero-title">
               {!isActive
                 ? role === 'lab'
-                  ? 'Sensor Standby — Menunggu Komando Admin'
+                  ? 'Sensor Standby'
                   : 'Ruang Studio Standby'
                 : isNoisy
-                ? 'Terdeteksi Suara Berisik'
-                : 'Suara Ruangan Kondusif'}
+                  ? 'Terdeteksi Suara Berisik'
+                  : 'Suara Ruangan Kondusif'}
             </h2>
             <p className="rt-hero-desc">
               {!isActive
                 ? role === 'lab'
-                  ? 'PC Lab siap menerima perintah remote. Start/Stop dan parameter dikendalikan langsung oleh Admin.'
+                  ? ''
                   : 'Sistem siap melakukan klasifikasi audio berisik vs non-berisik menggunakan model Weighted KNN.'
                 : isNoisy
-                ? 'Intensitas dan karakteristik spektral audio melampaui profil tenang lingkungan laboratorium.'
-                : 'Tingkat kebisingan berada dalam batas wajar lingkungan kerja dan tidak mengganggu aktivitas.'}
+                  ? 'Intensitas dan karakteristik spektral audio melampaui profil tenang lingkungan laboratorium.'
+                  : 'Tingkat kebisingan berada dalam batas wajar lingkungan kerja dan tidak mengganggu aktivitas.'}
             </p>
 
             {/* Multi-segment LED Bar Meter (28 Segmen) */}
@@ -1484,9 +1477,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   Akumulasi Bising
                 </div>
                 <div
-                  className={`rt-hero-metric-val font-mono ${
-                    progressPct >= 70 ? 'text-rose-600' : 'text-slate-800'
-                  }`}
+                  className={`rt-hero-metric-val font-mono ${progressPct >= 70 ? 'text-rose-600' : 'text-slate-800'
+                    }`}
                 >
                   {isActive ? `${windowNoisySeconds}s / ${minRequiredNoisy}s` : 'Standby'}
                 </div>
@@ -1502,9 +1494,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 <div className="flex items-center justify-between text-[11px] font-mono text-slate-600 px-1 mb-1 font-medium">
                   <div className="flex items-center gap-1.5">
                     <span
-                      className={`w-2 h-2 rounded-full ${
-                        isActive ? 'bg-teal-600 animate-pulse' : 'bg-slate-400'
-                      }`}
+                      className={`w-2 h-2 rounded-full ${isActive ? 'bg-teal-600 animate-pulse' : 'bg-slate-400'
+                        }`}
                     />
                     <span className="font-semibold text-slate-700">Live Waveform</span>
                   </div>
@@ -1531,9 +1522,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Status Deteksi:</span>
                       <span
-                        className={`font-semibold ${
-                          isActive ? 'text-teal-700 font-bold' : 'text-slate-600'
-                        }`}
+                        className={`font-semibold ${isActive ? 'text-teal-700 font-bold' : 'text-slate-600'
+                          }`}
                       >
                         {isActive ? 'Sedang Aktif (Mendeteksi)' : 'Standby (Menunggu Admin)'}
                       </span>
@@ -1549,9 +1539,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Alarm Speaker:</span>
                       <span
-                        className={`font-semibold ${
-                          alarmEnabled ? 'text-teal-700' : 'text-slate-500'
-                        }`}
+                        className={`font-semibold ${alarmEnabled ? 'text-teal-700' : 'text-slate-500'
+                          }`}
                       >
                         {alarmEnabled ? 'Aktif (3s)' : 'Dinonaktifkan Admin'}
                       </span>
@@ -1571,11 +1560,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 <>
                   <button
                     onClick={isActive ? handleAdminStopMonitoring : handleAdminStartMonitoring}
-                    className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm tracking-wide transition-all shadow-sm flex items-center justify-center gap-2.5 ${
-                      isActive
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
-                        : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
-                    }`}
+                    className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm tracking-wide transition-all shadow-sm flex items-center justify-center gap-2.5 ${isActive
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
+                      : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
+                      }`}
                   >
                     <HeroIcon name={isActive ? 'stop' : 'play'} className="w-5 h-5 text-white" />
                     <span>
@@ -1596,18 +1584,16 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                       <button
                         type="button"
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                        className={`rt-custom-dropdown-trigger ${
-                          isDropdownOpen ? 'open' : ''
-                        }`}
+                        className={`rt-custom-dropdown-trigger ${isDropdownOpen ? 'open' : ''
+                          }`}
                       >
                         <span className="font-bold text-slate-800 text-xs">
                           {selectedOption.label}
                         </span>
                         <HeroIcon
                           name="chevron-down"
-                          className={`w-4 h-4 text-slate-400 transition-transform ${
-                            isDropdownOpen ? 'rotate-180' : ''
-                          }`}
+                          className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''
+                            }`}
                         />
                       </button>
 
@@ -1636,11 +1622,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                                   <div className="flex-1">
                                     <div className="flex items-center justify-between">
                                       <span
-                                        className={`text-xs ${
-                                          isSelected
-                                            ? 'font-bold text-teal-800'
-                                            : 'font-medium text-slate-800'
-                                        }`}
+                                        className={`text-xs ${isSelected
+                                          ? 'font-bold text-teal-800'
+                                          : 'font-medium text-slate-800'
+                                          }`}
                                       >
                                         {opt.label}
                                       </span>
@@ -1666,18 +1651,16 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   <button
                     onClick={handleCalibrate}
                     disabled={isActive || isCalibrating}
-                    className={`flex-1 inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-xs font-semibold transition-colors ${
-                      isCalibrating
-                        ? 'bg-teal-50 border-teal-300 text-teal-800'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-50'
-                    }`}
+                    className={`flex-1 inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-xs font-semibold transition-colors ${isCalibrating
+                      ? 'bg-teal-50 border-teal-300 text-teal-800'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-50'
+                      }`}
                     title="Mengukur level suara hening ruangan selama 3 detik"
                   >
                     <HeroIcon
                       name="adjustments"
-                      className={`w-3.5 h-3.5 ${
-                        isCalibrating ? 'animate-spin text-teal-600' : 'text-slate-500'
-                      }`}
+                      className={`w-3.5 h-3.5 ${isCalibrating ? 'animate-spin text-teal-600' : 'text-slate-500'
+                        }`}
                     />
                     <span>{isCalibrating ? 'Mengukur Ambien...' : 'Kalibrasi Ruangan'}</span>
                   </button>
@@ -1704,20 +1687,18 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           ============================================================================== */}
       {isActive && (
         <div
-          className={`rt-persistence-hero-banner ${
-            alarmCooldownSeconds > 0 || progressPct >= 70 ? 'noisy' : ''
-          }`}
+          className={`rt-persistence-hero-banner ${alarmCooldownSeconds > 0 || progressPct >= 70 ? 'noisy' : ''
+            }`}
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <span
-                className={`w-2.5 h-2.5 rounded-full ${
-                  alarmCooldownSeconds > 0
-                    ? 'bg-rose-600 animate-ping'
-                    : progressPct >= 70
+                className={`w-2.5 h-2.5 rounded-full ${alarmCooldownSeconds > 0
+                  ? 'bg-rose-600 animate-ping'
+                  : progressPct >= 70
                     ? 'bg-amber-500 animate-pulse'
                     : 'bg-teal-600 animate-pulse'
-                }`}
+                  }`}
               />
               <div>
                 <span className="font-bold text-xs sm:text-sm text-slate-800">
@@ -1736,13 +1717,12 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 Progres Bising:
               </span>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border ${
-                  progressPct >= 100
-                    ? 'bg-rose-100 text-rose-800 border-rose-300'
-                    : progressPct >= 70
+                className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border ${progressPct >= 100
+                  ? 'bg-rose-100 text-rose-800 border-rose-300'
+                  : progressPct >= 70
                     ? 'bg-amber-100 text-amber-800 border-amber-300'
                     : 'bg-slate-100 text-teal-800 border-slate-200'
-                }`}
+                  }`}
               >
                 {windowNoisySeconds}s / {minRequiredNoisy}s ({progressPct}%)
               </span>
@@ -1903,11 +1883,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   Rasio Kebisingan
                 </div>
                 <div
-                  className={`text-xl font-bold font-mono mt-1 ${
-                    totalChunks > 0 && noisyChunks / totalChunks >= 0.5
-                      ? 'text-rose-600'
-                      : 'text-teal-700'
-                  }`}
+                  className={`text-xl font-bold font-mono mt-1 ${totalChunks > 0 && noisyChunks / totalChunks >= 0.5
+                    ? 'text-rose-600'
+                    : 'text-teal-700'
+                    }`}
                 >
                   {totalChunks > 0 ? `${((noisyChunks / totalChunks) * 100).toFixed(1)}%` : '0%'}
                 </div>
@@ -1978,9 +1957,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             </span>
             <HeroIcon
               name="chevron-down"
-              className={`w-4 h-4 text-slate-400 transition-transform ${
-                isDiagOpen ? 'rotate-180' : ''
-              }`}
+              className={`w-4 h-4 text-slate-400 transition-transform ${isDiagOpen ? 'rotate-180' : ''
+                }`}
             />
           </div>
         </div>
@@ -2087,13 +2065,12 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                         </span>
                         <div className="w-full flex-1 flex items-end justify-center">
                           <div
-                            className={`w-full max-w-[28px] rounded-t transition-all duration-200 ${
-                              !currentResult
-                                ? 'bg-slate-200'
-                                : isPositive
+                            className={`w-full max-w-[28px] rounded-t transition-all duration-200 ${!currentResult
+                              ? 'bg-slate-200'
+                              : isPositive
                                 ? 'bg-teal-600 group-hover:bg-teal-700 shadow-sm'
                                 : 'bg-rose-500 group-hover:bg-rose-600 shadow-sm'
-                            }`}
+                              }`}
                             style={{ height: `${heightPercent}%`, minHeight: '8px' }}
                           />
                         </div>

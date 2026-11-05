@@ -58,21 +58,19 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
 
                   {/* Role Badge */}
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                    role === 'admin'
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${role === 'admin'
                       ? 'bg-teal-50 text-teal-800 border-teal-200'
                       : 'bg-slate-100 text-slate-700 border-slate-200'
-                  }`}>
+                    }`}>
                     <HeroIcon name={role === 'admin' ? 'shield-check' : 'computer-desktop'} className="w-3.5 h-3.5" />
                     <span>{role === 'admin' ? 'Remote Control Center' : 'PC Lab Display (Kiosk)'}</span>
                   </span>
 
                   {/* Engine Model Badge */}
-                  <span className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                    isModelReady
+                  <span className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${isModelReady
                       ? 'bg-teal-50 text-teal-800 border-teal-200'
                       : 'bg-rose-50 text-rose-800 border-rose-200'
-                  }`}>
+                    }`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${isModelReady ? 'bg-teal-500 animate-pulse-subtle' : 'bg-rose-500'}`} />
                     <span>{isModelReady ? 'Model WKNN 4s Siap' : 'Memuat Model'}</span>
                   </span>
@@ -80,8 +78,8 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <div className="text-xs text-slate-500 hidden sm:block">
                   {role === 'admin'
-                    ? 'Pusat Kendali Jarak Jauh & Konfigurasi Parameter Studio'
-                    : 'Layar Tampilan Pemantauan Laboratorium (Read-Only) — Dikendalikan oleh Admin'}
+                    ? 'Dashboard Admin'
+                    : 'Read-Only'}
                 </div>
               </div>
             </div>
@@ -103,11 +101,10 @@ export const Header: React.FC<HeaderProps> = ({
                     <button
                       key={tab.key}
                       onClick={() => onTabChange(tab.key)}
-                      className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
-                        isActive
+                      className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 ${isActive
                           ? 'bg-white text-teal-800 shadow-sm'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                      }`}
+                        }`}
                     >
                       <HeroIcon
                         name={tab.icon}
@@ -116,11 +113,10 @@ export const Header: React.FC<HeaderProps> = ({
                       <span>{tab.label}</span>
                       {tab.badge && (
                         <span
-                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                            tab.badge === 'Live'
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${tab.badge === 'Live'
                               ? 'bg-rose-600 text-white animate-pulse'
                               : 'bg-teal-100 text-teal-800'
-                          }`}
+                            }`}
                         >
                           {tab.badge}
                         </span>
@@ -168,20 +164,17 @@ export const Header: React.FC<HeaderProps> = ({
                     window.open('/', '_blank');
                   }
                 }}
-                className={`hidden xl:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                  !labConnected ? 'cursor-pointer hover:bg-rose-100 hover:border-rose-300' : ''
-                } ${
-                  labConnected && labMicReady
+                className={`hidden xl:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${!labConnected ? 'cursor-pointer hover:bg-rose-100 hover:border-rose-300' : ''
+                  } ${labConnected && labMicReady
                     ? 'bg-teal-50 text-teal-800 border-teal-200'
                     : (labConnected
                       ? 'bg-amber-50 text-amber-800 border-amber-200'
                       : 'bg-rose-50 text-rose-800 border-rose-200')
-                }`}
+                  }`}
                 title={!labConnected ? 'Klik untuk membuka layar sensor PC Lab di tab baru' : undefined}
               >
-                <span className={`w-2 h-2 rounded-full ${
-                  labConnected && labMicReady ? 'bg-teal-500 animate-pulse' : (labConnected ? 'bg-amber-500' : 'bg-rose-500')
-                }`} />
+                <span className={`w-2 h-2 rounded-full ${labConnected && labMicReady ? 'bg-teal-500 animate-pulse' : (labConnected ? 'bg-amber-500' : 'bg-rose-500')
+                  }`} />
                 <span>
                   {labConnected && labMicReady
                     ? 'PC Lab Terhubung'
