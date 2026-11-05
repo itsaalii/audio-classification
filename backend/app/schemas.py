@@ -87,3 +87,46 @@ class HealthResult(BaseModel):
     sklearn_version: str
     uptime_s: float
 
+class RemoteCommandRequest(BaseModel):
+    action: str = Field(..., description="Command action: START_MONITORING, STOP_MONITORING, UPDATE_CONFIG, RESET_BUFFER, TRIGGER_TEST_ALARM")
+    params: Optional[dict[str, Any]] = Field(default=None, description="Additional parameters (e.g. tolerance_seconds, alarm_enabled)")
+
+class TelemetryPayload(BaseModel):
+    timestamp: float
+    is_monitoring: bool
+    status: str
+    label: str
+    confidence: float
+    probabilities: dict[str, float]
+    rms: float
+    centroid_hz: float
+    zcr: float
+    mfccs: list[float]
+    db_level: float = 0.0
+    led_index: int = 0
+    window_noisy_seconds: int = 0
+    window_total_seconds: int = 0
+    min_required_noisy: int = 0
+    progress_pct: int = 0
+    alarm_cooldown_seconds: int = 0
+    alarm_triggered: bool = False
+    session_seconds: int = 0
+    total_chunks: int = 0
+    noisy_chunks: int = 0
+    clean_chunks: int = 0
+    total_alerts_count: int = 0
+    latency_ms: float = 0.0
+    recent_timeline: list[dict[str, Any]] = []
+    audio_preview: Optional[list[float]] = None
+
+class RoomStateResponse(BaseModel):
+    is_monitoring: bool
+    tolerance_seconds: int
+    alarm_enabled: bool
+    lab_client_connected: bool
+    lab_mic_ready: bool
+    admin_count: int = 0
+    lab_count: int = 0
+    latest_telemetry: Optional[dict[str, Any]] = None
+
+

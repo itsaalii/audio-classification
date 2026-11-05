@@ -1,26 +1,90 @@
-# AcoustiKNN Studio: Deteksi & Klasifikasi Real-Time Audio Berisik
+# AcoustiKNN Studio: Deteksi & Klasifikasi Real-Time Audio Berisik (Dual-Role Architecture)
 
-Sistem cerdas deteksi dan klasifikasi kebisingan audio digital (**Berisik** vs **Non-Berisik**) berbasis web interaktif dan *real-time*. Dibangun menggunakan arsitektur modern **FastAPI** di sisi backend dan **React 19 + TypeScript + Vite + Tailwind CSS** di sisi frontend, sistem ini memanfaatkan **Web Audio API** dan **HTML5 Canvas 2D (60 FPS)** untuk visualisasi sinyal serta inferensi latensi rendah.
+Sistem cerdas deteksi dan klasifikasi kebisingan audio digital (**Berisik** vs **Non-Berisik**) berbasis web interaktif dan *real-time* dengan arsitektur **Dual-Role Interface**:
+1. **PC Lab Display / Kiosk (`/` atau `/lab`)**: Sensor penangkap mikrofon ruangan laboratorium sekaligus layar informasi *read-only* dengan inisialisasi *one-click kiosk gesture*.
+2. **Admin Remote Control Center (`/admin`)**: Pusat kendali jarak jauh terproteksi PIN (default: `1234`) untuk memulai/menghentikan pemantauan, mengubah durasi toleransi *rolling window*, membunyikan alarm uji coba, dan memantau telemetri akustik 60 FPS secara tersinkronisasi.
+
+Dibangun menggunakan arsitektur modern **FastAPI (In-Memory Singleton + WebSocket Hub)** di sisi backend dan **React 19 + TypeScript + Vite + Tailwind CSS** di sisi frontend, sistem ini memanfaatkan **Web Audio API** dan **HTML5 Canvas 2D (60 FPS)** untuk visualisasi sinyal berlatar belakang putih bersih (`#FFFFFF`) serta inferensi latensi rendah.
 
 Model machine learning inti ditenagai oleh **Weighted K-Nearest Neighbors (WKNN)** dengan **Segmentasi Jendela 4.0 Detik ($88.200$ sampel @ $22.050\text{ Hz}$)** dan penskalaan **RobustScaler** pada 16 parameter akustik Pengolahan Sinyal Digital (PSD), menghasilkan **Akurasi Uji 97.64%** dan **5-Fold Cross Validation 97.58%**.
 
 ---
 
 ## Daftar Isi
-1. [Ringkasan Spesifikasi Model](#ringkasan-spesifikasi-model)
-2. [Arsitektur Sistem & Alur Inferensi](#arsitektur-sistem--alur-inferensi)
-3. [Teknologi Pemuatan Model (In-Memory Singleton)](#teknologi-pemuatan-model-in-memory-singleton)
-4. [Daftar 16 Fitur Pengolahan Sinyal Digital (PSD) & Formula Matematis](#daftar-16-fitur-pengolahan-sinyal-digital-psd--formula-matematis)
-5. [Logika Kebisingan Konsisten & Toleransi Bergerak (Rolling Window)](#logika-kebisingan-konsisten--toleransi-bergerak-rolling-window)
-6. [Fitur & 4 Modul Antarmuka](#fitur--4-modul-antarmuka)
-7. [Desain, Tipografi & Standar Tampilan](#desain-tipografi--standar-tampilan)
-8. [Struktur Direktori Proyek](#struktur-direktori-proyek)
-9. [Dokumentasi Endpoint REST API](#dokumentasi-endpoint-rest-api)
-10. [Panduan Menjalankan Aplikasi](#panduan-menjalankan-aplikasi)
+1. [Arsitektur Dual-Role & Sinkronisasi Real-Time](#arsitektur-dual-role--sinkronisasi-real-time)
+2. [Akses Antarmuka & Hak Akses Peran](#akses-antarmuka--hak-akses-peran)
+3. [Ringkasan Spesifikasi Model](#ringkasan-spesifikasi-model)
+4. [Arsitektur Sistem & Alur Inferensi](#arsitektur-sistem--alur-inferensi)
+5. [Teknologi Pemuatan Model & Room State Manager](#teknologi-pemuatan-model--room-state-manager)
+6. [Daftar 16 Fitur Pengolahan Sinyal Digital (PSD) & Formula Matematis](#daftar-16-fitur-pengolahan-sinyal-digital-psd--formula-matematis)
+7. [Logika Kebisingan Konsisten & Toleransi Bergerak (Rolling Window)](#logika-kebisingan-konsisten--toleransi-bergerak-rolling-window)
+8. [Fitur & 4 Modul Antarmuka](#fitur--4-modul-antarmuka)
+9. [Desain, Tipografi & Standar Tampilan](#desain-tipografi--standar-tampilan)
+10. [Struktur Direktori Proyek](#struktur-direktori-proyek)
+11. [Dokumentasi Endpoint REST API & WebSocket](#dokumentasi-endpoint-rest-api--websocket)
+12. [Panduan Menjalankan Aplikasi](#panduan-menjalankan-aplikasi)
     - [A. Menjalankan Langsung (Mode Produksi Lokal)](#a-menjalankan-langsung-mode-produksi-lokal)
     - [B. Menjalankan Mode Pengembangan (Frontend & Backend Terpisah)](#b-menjalankan-mode-pengembangan-frontend--backend-terpisah)
     - [C. Menjalankan via Docker & Docker Compose](#c-menjalankan-via-docker--docker-compose)
-11. [Hasil Evaluasi & Matriks Kebingungan](#hasil-evaluasi--matriks-kebingungan)
+13. [Hasil Evaluasi & Matriks Kebingungan](#hasil-evaluasi--matriks-kebingungan)
+
+---
+
+## Arsitektur Dual-Role & Sinkronisasi Real-Time
+
+Aplikasi AcoustiKNN Studio memisahkan peran perangkat penangkap audio di dalam laboratorium dengan perangkat pengawas/pengendali jarak jauh:
+
+```text
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                      Interface PC Lab Display                          │
+ │                    URL: http://localhost:8080/                         │
+ │                                                                        │
+ │  • One-Click Kiosk Activation (Inisialisasi Mic & AudioContext)        │
+ │  • Penangkapan Audio Mikrofon 22.050 Hz (Buffer 4 Detik)               │
+ │  • Pemutaran Alarm 3 Detik di Speaker PC Lab (audioAlert.ts)           │
+ │  • Tampilan Read-Only (Start/Stop & Kustomisasi Terkunci)              │
+ │  • Visualisasi 60 FPS (LED Meter, Osiloskop, Spektrogram, 16 PSD)      │
+ └───────────────────────────────▲────────────────────────────────────────┘
+                                 │
+                   WebSocket /api/ws/room?role=lab
+                   (Perintah START/STOP, UPDATE_CONFIG, TELEMETRY_UPDATE)
+                                 │
+                                 ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                    Backend FastAPI (Port 8080)                         │
+ │                                                                        │
+ │  • RoomStateManager (In-Memory Singleton pada app.state.room)          │
+ │  • WKNN Model & RobustScaler (In-Memory Singleton pada RAM)            │
+ │  • Endpoint WebSocket Hub: /api/ws/room?role={lab|admin}               │
+ │  • Endpoint REST Komando: POST /api/remote/command                     │
+ │  • Endpoint Snapshot Status: GET /api/remote/state                     │
+ └───────────────────────────────▲────────────────────────────────────────┘
+                                 │
+                  WebSocket /api/ws/room?role=admin
+                  (STATE_SYNC, TELEMETRY_UPDATE, ADMIN_COMMAND)
+                                 │
+                                 ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                 Interface Admin Remote Control Center                  │
+ │                  URL: http://localhost:8080/admin                      │
+ │                                                                        │
+ │  • Verifikasi PIN Masuk (Default: 1234, Session Storage)               │
+ │  • Indikator Status Koneksi & Kesiapan PC Lab Real-Time                │
+ │  • Tombol Jarak Jauh: Mulai / Hentikan Deteksi Suara Lab               │
+ │  • Pengaturan Toleransi Rolling Window (1s, 4s, 5s, 10s, 15s, 20s, 30s)│
+ │  • Sakelar Alarm Bunyi PC Lab, Reset Akumulasi & Uji Alarm (3s)        │
+ │  • Telemetri Sinkron 60 FPS & Akses Penuh ke 4 Modul Studio            │
+ └────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Akses Antarmuka & Hak Akses Peran
+
+| Peran | Rute URL | Proteksi Akses | Tanggung Jawab Utama | Kontrol Interaktif |
+|---|---|---|---|---|
+| **PC Lab Display** | `http://localhost:8080/` atau `/lab` | Terbuka (Mode Kiosk) | Menangkap audio mikrofon, menjalankan loop inferensi, membunyikan alarm 3s, menampilkan data *read-only*. | Hanya 1 tombol aktivasi sensor audio saat booting. Start/Stop & parameter terkunci. |
+| **Admin Control** | `http://localhost:8080/admin` | PIN Otorisasi (Default: `1234`) | Mengendalikan sistem dari jarak jauh, mengubah parameter toleransi, reset buffer, akses modul audit & file inspector. | Akses penuh: Start/Stop, Pilihan Toleransi, Sakelar Alarm, Uji Alarm, 4 Tab Navigasi. |
 
 ---
 
@@ -45,11 +109,11 @@ Model machine learning inti ditenagai oleh **Weighted K-Nearest Neighbors (WKNN)
 ## Arsitektur Sistem & Alur Inferensi
 
 ```text
-[Browser React 19]
-  ├── Input Mikrofon: Web Audio API (AudioContext) -> Circular Buffer (4s)
-  └── Upload File: File WAV/MP3 -> Segmentasi 4s
+[PC Lab Browser]
+  ├── One-Click Activation: Inisialisasi AudioContext & Mikrofon Standby
+  └── Loop 1000ms: Circular Buffer 4s -> Encode WAV 16-bit PCM Mono 22.050 Hz
            │
-           │ HTTP POST (Multipart/WAV 16-bit PCM Mono 22.050 Hz)
+           │ HTTP POST /api/predict-live (WAV Blob)
            ▼
 [FastAPI Backend]
   ├── 1. Ingestion Buffer Audio (Soundfile / Librosa)
@@ -59,22 +123,30 @@ Model machine learning inti ditenagai oleh **Weighted K-Nearest Neighbors (WKNN)
            │
            │ JSON Result (Prediksi, Probabilitas, 16 Fitur Akustik)
            ▼
-[Tampilan & Aksi Respon]
-  ├── Visualizer Osiloskop & Spektrogram 60 FPS (Canvas Latar Putih)
-  ├── Evaluasi Kebisingan Konsisten (Jendela Bergerak / Rolling Window)
-  └── Pemicuan Alarm Otomatis 3 Detik jika Konsistensi Terpenuhi
+[PC Lab Evaluator]
+  ├── Evaluasi Rolling Window (Batas Toleransi: mis. 80% dari durasi)
+  ├── Pemicuan Alarm 3s di Speaker Lab jika konsistensi terpenuhi
+  └── WS TELEMETRY_UPDATE -> RoomStateManager -> Broadcast ke Admin
+           │
+           ▼
+[Admin Remote Control]
+  ├── Rekonstruksi Visualisasi 60 FPS Mulus (LED Meter, Osiloskop, Spektrum)
+  └── Kontrol Interaktif Jarak Jauh (Start/Stop, Ubah Toleransi, Sakelar Alarm)
 ```
 
 ---
 
-## Teknologi Pemuatan Model (In-Memory Singleton)
+## Teknologi Pemuatan Model & Room State Manager
 
-Untuk menghasilkan latensi inferensi ultra-rendah (~8–15 milidetik per request), aplikasi tidak memuat ulang model dari disk setiap kali ada request masuk:
-
-1. **Resolusi Lokasi Berkas**: Terletak pada `backend/app/config.py`, fungsi `find_file` mendeteksi file `model_k_nearest_neighbors_knn.pkl` dan `scaler_audio.pkl`.
-2. **Deserialisasi**: Di dalam kelas `WKNNPredictor` (`backend/app/services/predictor.py`), model dan scaler dibaca sekali saat startup menggunakan `joblib.load()`.
-3. **Pemanasan Inferensi (*Warmup*)**: Metode `warmup()` menjalankan inferensi simulasi pada *array* sintetis saat startup untuk mengompilasi JIT cache (Numba & Librosa).
-4. **FastAPI Lifespan Context**: Di `backend/app/main.py`, objek diikat ke `app.state.predictor` sehingga siap diakses secara konkruen oleh seluruh router API.
+1. **WKNN In-Memory Singleton**: Di dalam kelas `WKNNPredictor` (`backend/app/services/predictor.py`), model dan scaler dimuat sekali saat startup menggunakan `joblib.load()`.
+2. **FastAPI Lifespan Context**: Diikat ke `app.state.predictor` sehingga inferensi hanya memakan waktu 8–15 ms per request.
+3. **RoomStateManager Singleton (`backend/app/services/room_manager.py`)**: Diikat ke `app.state.room` untuk mengelola:
+   - Status pemantauan ruangan aktif/standby (`is_monitoring`).
+   - Waktu toleransi kebisingan aktif (`tolerance_seconds`).
+   - Status sakelar alarm audio (`alarm_enabled`).
+   - Kesiapan koneksi dan sensor PC Lab (`lab_client_connected`, `lab_mic_ready`).
+   - Snapshot telemetri sub-detik terakhir (`latest_telemetry`).
+   - Kumpulan koneksi aktif WebSocket PC Lab (`lab_connections`) dan Admin (`admin_connections`).
 
 ---
 
@@ -136,20 +208,20 @@ Sistem menggunakan model **Toleransi Bergerak (*Rolling Window*)** untuk memanta
 - **Linimasa Riwayat 30 Detik**: Grafik tren persentase kebisingan dengan garis batas ambang 70%.
 - **Diagnostik 16 Parameter**: Menampilkan nilai numerik RMS, Centroid, ZCR, serta grafik batang profil 13 koefisien MFCC yang stabil.
 
-### Modul 2: Analisis Berkas Audio (Audio Inspector)
+### Modul 2: Analisis Berkas Audio (Audio Inspector - Khusus Admin)
 - Mengunggah berkas suara pribadi (`.mp3` atau `.wav`) atau memilih dari pustaka audio sampel.
 - Pemutar audio bawaan dengan garis kursor *playback* sinkron di atas kanvas gelombang latar putih.
 - Segmentasi otomatis 4.0 detik dengan kartu visual berurutan (Teal untuk kondusif, Rose untuk berisik).
 - Mengklik segmen manapun akan langsung memindahkan posisi putar audio ke waktu tersebut.
 - Tabel 16 fitur akustik lengkap dengan fitur pencarian dan tombol **Ekspor CSV**.
 
-### Modul 3: Riwayat Sesi (Audit Log & Export)
+### Modul 3: Riwayat Sesi (Audit Log & Export - Khusus Admin)
 - Mencatat seluruh riwayat pemantauan mikrofon, event peringatan bising konsisten, dan analisis berkas ke penyimpanan peramban (*LocalStorage*).
 - Indikator ringkasan KPI: Total sesi, akumulasi durasi, dan rata-rata rasio kebisingan.
 - Filter riwayat berdasarkan tipe sesi (*Live Monitor* atau *Berkas Audio*).
 - Tombol **Ekspor Semua ke CSV** dan **Hapus Log**.
 
-### Modul 4: Arsitektur & 16 Fitur PSD (Model Intelligence)
+### Modul 4: Arsitektur & 16 Fitur PSD (Model Intelligence - Khusus Admin)
 - Penjelasan lengkap arsitektur model Weighted KNN ($K=4$, pembobotan invers jarak, metrik Euclidean).
 - Representasi visual Matriks Kebingungan (*Confusion Matrix*) dengan statistik performa uji.
 - Kamus interaktif 16 parameter akustik dengan formula matematis yang dirender rapi menggunakan KaTeX.
@@ -176,47 +248,100 @@ Sistem menggunakan model **Toleransi Bergerak (*Rolling Window*)** untuk memanta
 audio-docker/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                  # Aplikasi FastAPI, in-memory lifespan, static mount
+│   │   ├── main.py                  # Aplikasi FastAPI, lifespan, state room & SPA serve
 │   │   ├── config.py                # Konfigurasi parameter audio 4s & path model
-│   │   ├── schemas.py               # Skema Pydantic respon API & validasi
+│   │   ├── schemas.py               # Skema Pydantic respon API, remote command & telemetri
 │   │   ├── api/
-│   │   │   ├── predict.py           # Endpoint POST /api/predict/live & POST /api/predict/file
+│   │   │   ├── predict.py           # Endpoint POST /api/predict-live & POST /api/predict
+│   │   │   ├── remote.py            # WebSocket /api/ws/room, GET /state & POST /command
 │   │   │   ├── model_info.py        # Endpoint GET /api/model-info (metadata & rumus KaTeX)
 │   │   │   └── health.py            # Endpoint GET /api/health (status model di RAM)
 │   │   └── services/
 │   │       ├── predictor.py         # WKNNPredictor (joblib load saat startup + warmup)
+│   │       ├── room_manager.py      # RoomStateManager (In-Memory Singleton & WS Hub)
 │   │       └── features.py          # Ekstraksi 16 fitur akustik PSD (Librosa & NumPy)
 │   └── requirements.txt             # Dependensi Python backend
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Header.tsx           # Header aplikasi & navigasi 4 tab
+│   │   │   ├── Header.tsx           # Header adaptif role (PC Lab Kiosk vs Admin Control)
+│   │   │   ├── AdminGateModal.tsx   # Modal proteksi PIN Admin (default: 1234)
 │   │   │   ├── HeroIcon.tsx         # Komponen ikon murni SVG Heroicons (tanpa emoji)
 │   │   │   ├── Latex.tsx            # Komponen render KaTeX matematika native
-│   │   │   ├── LiveMonitor.tsx      # Monitoring mikrofon, rolling window & alarm 3s
+│   │   │   ├── LiveMonitor.tsx      # Dual-Role Monitor (PC Lab Sensor vs Remote Control)
 │   │   │   ├── FileAnalyzer.tsx     # Analisis berkas audio, segmentasi 4s & waveform putih
 │   │   │   ├── HistoryLog.tsx       # Riwayat audit log & ekspor data CSV
 │   │   │   └── ModelIntelligence.tsx# Spesifikasi WKNN & kamus rumus KaTeX 16 fitur PSD
 │   │   ├── services/
-│   │   │   └── api.ts               # Klien Axios pemanggil backend API
+│   │   │   ├── api.ts               # Klien Fetch API backend FastAPI
+│   │   │   └── remoteSocket.ts      # Klien WebSocket auto-reconnect dual-role
 │   │   ├── utils/
 │   │   │   ├── wavEncoder.ts        # Konverter Float32Array ke 16-bit PCM WAV mono 22.050 Hz
 │   │   │   └── audioAlert.ts        # Sintesis alarm Web Audio API (durasi 3 detik)
-│   │   ├── App.tsx                  # Root aplikasi React
+│   │   ├── App.tsx                  # Root aplikasi React & routing role URL
 │   │   ├── index.css                # Konfigurasi Tailwind & font Poppins
 │   │   └── main.tsx                 # Entrypoint Vite & impor KaTeX stylesheet
 │   ├── tailwind.config.js           # Konfigurasi tema warna Teal & font Poppins
-│   ├── vite.config.ts               # Konfigurasi bundler Vite & proxy port 8080
-│   └── package.json                 # Dependensi frontend (React 19, KaTeX, Tailwind, Lucide)
+│   ├── vite.config.ts               # Konfigurasi bundler Vite & proxy WebSocket
+│   └── package.json                 # Dependensi frontend (React 19, KaTeX, Tailwind)
 ├── samples/                         # Berkas audio sampel bawaan (.wav / .mp3)
 ├── model_k_nearest_neighbors_knn.pkl# Model biner WKNN terlatih (K=4, weights=distance)
 ├── scaler_audio.pkl                 # Scaler biner RobustScaler terlatih
 ├── audio_features_4s.csv            # Dataset 16 fitur akustik (5.286 segmen)
 ├── Dockerfile                       # Multi-stage Docker build (Node 22 + Python 3.12)
 ├── docker-compose.yml               # File orkestrasi Docker
-├── prompt.md                        # Catatan spesifikasi & evaluasi proyek
+├── prompt.md                        # Spesifikasi pengembangan Dual-Role Interface
 └── README.md                        # Dokumentasi lengkap proyek
 ```
+
+---
+
+## Dokumentasi Endpoint REST API & WebSocket
+
+### 1. WebSocket Sinkronisasi Ruangan (`WS /api/ws/room?role={lab|admin}`)
+- **Koneksi**: Persisten dua arah dengan auto-reconnect.
+- **Pesan yang Didukung**:
+  - `STATE_SYNC`: Dikirim oleh server saat koneksi baru terhubung atau ada perubahan status.
+  - `MIC_STATUS`: Dikirim oleh PC Lab untuk mengabarkan bahwa sensor mikrofon telah aktif.
+  - `TELEMETRY_UPDATE`: Dikirim oleh PC Lab tiap 1 detik berisi status, probabilitas, 16 parameter PSD, dan cuplikan audio *preview*.
+  - `ADMIN_COMMAND`: Dikirim oleh Admin untuk komando `START_MONITORING`, `STOP_MONITORING`, `UPDATE_CONFIG`, `RESET_BUFFER`, atau `TRIGGER_TEST_ALARM`.
+
+### 2. Snapshot Status Remote (`GET /api/remote/state`)
+- **Respon**:
+  ```json
+  {
+    "is_monitoring": false,
+    "tolerance_seconds": 10,
+    "alarm_enabled": true,
+    "lab_client_connected": true,
+    "lab_mic_ready": true,
+    "admin_count": 1,
+    "lab_count": 1,
+    "latest_telemetry": null
+  }
+  ```
+
+### 3. Eksekusi Komando Remote (`POST /api/remote/command`)
+- **Payload Request**:
+  ```json
+  {
+    "action": "UPDATE_CONFIG",
+    "params": {
+      "tolerance_seconds": 4,
+      "alarm_enabled": true
+    }
+  }
+  ```
+- **Aksi yang Tersedia**:
+  - `START_MONITORING`: Memulai deteksi suara pada mikrofon PC Lab.
+  - `STOP_MONITORING`: Menghentikan deteksi suara pada PC Lab.
+  - `UPDATE_CONFIG`: Mengubah waktu toleransi (`1`, `4`, `5`, `10`, `15`, `20`, `30`) atau sakelar alarm (`true`/`false`).
+  - `RESET_BUFFER`: Mengosongkan akumulasi detik kebisingan saat ini.
+  - `TRIGGER_TEST_ALARM`: Membunyikan alarm 3 detik di speaker PC Lab secara manual.
+
+### 4. Deteksi Mikrofon Live (`POST /api/predict-live`)
+- **Input**: Berkas WAV 16-bit PCM mono 22.050 Hz (panjang 4.0 detik) & `baseline_rms` opsional.
+- **Respon**: Label klasifikasi, probabilitas, dan 16 parameter akustik PSD lengkap.
 
 ---
 
@@ -235,7 +360,8 @@ cd ..
 py -3.13 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8080
 ```
 
-Buka peramban di: **`http://localhost:8080`**.
+- Buka **Interface PC Lab Display**: **`http://localhost:8080/`** (atau `/lab`).
+- Buka **Interface Admin Remote Control**: **`http://localhost:8080/admin`** (PIN default: `1234`).
 
 ---
 
@@ -250,7 +376,8 @@ cd frontend
 npm run dev
 ```
 
-Buka peramban di: **`http://localhost:5173`**.
+- Buka **Interface PC Lab Display**: **`http://localhost:5173/`**
+- Buka **Interface Admin Remote Control**: **`http://localhost:5173/admin`**
 
 ---
 
@@ -260,4 +387,16 @@ Buka peramban di: **`http://localhost:5173`**.
 docker compose up --build
 ```
 
-Aplikasi langsung dapat diakses di: **`http://localhost:8080`**.
+Aplikasi langsung dapat diakses di: **`http://localhost:8020`** (atau port host sesuai `docker-compose.yml`).
+
+---
+
+## Hasil Evaluasi & Matriks Kebingungan
+
+Evaluasi model Weighted KNN K=4 pada data uji ($N = 1.058$ segmen):
+
+| | Prediksi Non-Berisik | Prediksi Berisik | Total Aktual | Recall |
+|---|---|---|---|---|
+| **Aktual Non-Berisik** | **540** | 7 | 547 | **98.72%** |
+| **Aktual Berisik** | 18 | **493** | 511 | **96.48%** |
+| **Total Prediksi** | 558 | 500 | 1.058 | **Akurasi 97.64%** |

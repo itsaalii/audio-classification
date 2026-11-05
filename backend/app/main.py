@@ -15,7 +15,8 @@ from backend.app.config import (
     SCALER_PATH
 )
 from backend.app.services.predictor import WKNNPredictor
-from backend.app.api import predict, model_info, health
+from backend.app.services.room_manager import RoomStateManager
+from backend.app.api import predict, model_info, health, remote
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,6 +27,10 @@ async def lifespan(app: FastAPI):
     predictor.warmup()
     app.state.predictor = predictor
     print("[STARTUP] Model WKNN dan RobustScaler siap di memori!")
+
+    # Inisialisasi State Manager Ruang Lab & Remote Control
+    app.state.room = RoomStateManager()
+    print("[STARTUP] RoomStateManager (Dual-Role WebSocket Hub) aktif!")
     yield
     print("[SHUTDOWN] Menghentikan server...")
 
@@ -35,6 +40,9 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan
 )
+
+# Inisialisasi default RoomStateManager untuk memastikan state selalu tersedia
+app.state.room = RoomStateManager()
 
 # CORS Middleware
 app.add_middleware(
@@ -58,6 +66,7 @@ async def add_process_time_header(request: Request, call_next):
 app.include_router(predict.router)
 app.include_router(model_info.router)
 app.include_router(health.router)
+app.include_router(remote.router)
 
 # Mount Sample Audios
 if os.path.exists(SAMPLES_DIR):
