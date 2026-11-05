@@ -19,13 +19,12 @@ export const AdminGateModal: React.FC<AdminGateModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Default PIN: 1234
     if (pin.trim() === '1234') {
       setError(null);
       setPin('');
       onSuccess();
     } else {
-      setError('PIN tidak valid. Masukkan PIN otorisasi default: 1234.');
+      setError('PIN tidak valid. Silakan coba lagi.');
     }
   };
 
@@ -63,7 +62,7 @@ export const AdminGateModal: React.FC<AdminGateModalProps> = ({
                   setPin(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Masukkan PIN (Default: 1234)"
+                placeholder="Masukkan PIN otorisasi"
                 autoFocus
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all placeholder:text-slate-400 placeholder:text-xs placeholder:tracking-normal"
               />
@@ -74,13 +73,6 @@ export const AdminGateModal: React.FC<AdminGateModalProps> = ({
                 <span>{error}</span>
               </div>
             )}
-          </div>
-
-          <div className="p-3 bg-teal-50/60 border border-teal-100 rounded-xl text-xs text-teal-800 flex items-start gap-2">
-            <HeroIcon name="information-circle" className="w-4 h-4 text-teal-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold">Informasi Sistem:</span> Gunakan PIN default <span className="font-mono font-bold">1234</span> untuk masuk ke mode kendali jarak jauh.
-            </div>
           </div>
 
           {/* Action Buttons */}
