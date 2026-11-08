@@ -84,6 +84,9 @@ if FRONTEND_DIST.exists():
         # Abaikan rute API, docs, openapi, dan samples
         if full_path.startswith("api") or full_path.startswith("samples") or full_path in ["docs", "redoc", "openapi.json"]:
             return None
+        candidate = FRONTEND_DIST / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
         index_file = FRONTEND_DIST / "index.html"
         if index_file.exists():
             return FileResponse(str(index_file))

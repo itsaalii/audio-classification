@@ -100,9 +100,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     timestamp: number;
   } | null>(null);
 
-  // State Audio Alarm / Beep Panjang
+  // State Audio Alarm
   const [alarmEnabled, setAlarmEnabled] = useState(true);
-  const [beepDuration, setBeepDuration] = useState<number>(3); // Default 3 detik
   const [alarmVolume, setAlarmVolume] = useState<number>(0.6);
 
   // State Diagnostik Collapsible
@@ -144,9 +143,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 
   const alarmEnabledRef = useRef(alarmEnabled);
   alarmEnabledRef.current = alarmEnabled;
-
-  const beepDurationRef = useRef(beepDuration);
-  beepDurationRef.current = beepDuration;
 
   const alarmVolumeRef = useRef(alarmVolume);
   alarmVolumeRef.current = alarmVolume;
@@ -419,14 +415,14 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           isConsistent = currentWindowLen >= targetDuration && currentNoisyCount >= minReq;
 
           if (isConsistent) {
-            const currentBeepDur = beepDurationRef.current;
+            const alertDur = Math.ceil(alertPlayer.getDuration());
 
             if (alarmEnabledRef.current) {
-              alertPlayer.playLongBeep(currentBeepDur, alarmVolumeRef.current);
+              alertPlayer.playAlert(alarmVolumeRef.current);
             }
 
-            alarmCooldownUntilRef.current = now + currentBeepDur * 1000;
-            setAlarmCooldownSeconds(currentBeepDur);
+            alarmCooldownUntilRef.current = now + alertDur * 1000;
+            setAlarmCooldownSeconds(alertDur);
 
             totalAlertsCountRef.current += 1;
             const alertNum = totalAlertsCountRef.current;
@@ -738,8 +734,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
           setWindowNoisySeconds(0);
           setWindowTotalSeconds(0);
         } else if (cmd.action === 'TRIGGER_TEST_ALARM') {
-          alertPlayer.playLongBeep(3.0, alarmVolumeRef.current);
-          setAlarmCooldownSeconds(3);
+          const dur = Math.ceil(alertPlayer.playAlert(alarmVolumeRef.current));
+          setAlarmCooldownSeconds(dur);
         }
       }
     });
@@ -1116,9 +1112,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 <h3 className="text-lg font-extrabold text-slate-800 tracking-tight">
                   Aktifkan Sensor Audio PC Lab
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                  Sesuai kebijakan keamanan browser, sensor mikrofon wajib diinisialisasi melalui 1 interaksi klik.
-                  Setelah diaktifkan, deteksi audio dan alarm 3 detik akan dikomandoi sepenuhnya secara jarak jauh oleh Admin dari antarmuka <span className="font-mono font-semibold text-teal-800">/admin</span>.
+                <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                  Inisialisasi sensor mikrofon untuk mengaktifkan pemantauan audio PC Lab.
                 </p>
                 {kioskInitError && (
                   <div className="mt-2 text-xs font-semibold text-rose-600 flex items-center gap-1.5">
@@ -1190,9 +1185,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Perintah Start/Stop, perubahan durasi toleransi, dan pemicuan alarm akan langsung disinkronkan ke PC Lab.
-                </p>
               </div>
             </div>
 
@@ -1299,33 +1291,18 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   <span>{alarmEnabled ? 'Aktif' : 'Nonaktif'}</span>
                 </button>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
-                <span>Durasi: {beepDuration}s</span>
-                <div className="flex items-center gap-1">
-                  {[1, 3, 5].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setBeepDuration(s)}
-                      className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${beepDuration === s
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                        }`}
-                    >
-                      {s}s
-                    </button>
-                  ))}
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="1.0"
-                    step="0.1"
-                    title={`Volume Alarm: ${Math.round(alarmVolume * 100)}%`}
-                    value={alarmVolume}
-                    onChange={(e) => setAlarmVolume(parseFloat(e.target.value))}
-                    className="w-10 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600 ml-1"
-                  />
-                </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-200">
+                <span className="font-medium">Volume: {Math.round(alarmVolume * 100)}%</span>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1.0"
+                  step="0.05"
+                  title={`Volume Alarm: ${Math.round(alarmVolume * 100)}%`}
+                  value={alarmVolume}
+                  onChange={(e) => setAlarmVolume(parseFloat(e.target.value))}
+                  className="w-24 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                />
               </div>
             </div>
 
@@ -1354,10 +1331,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                 type="button"
                 onClick={handleAdminTestAlarm}
                 className="w-full py-1.5 px-3 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs font-semibold text-teal-800 transition-colors flex items-center justify-center gap-1.5"
-                title="Membunyikan alarm 3 detik di speaker PC Lab"
+                title="Memutar audio peringatan alert.mpeg di speaker PC Lab"
               >
                 <HeroIcon name="volume-up" className="w-3.5 h-3.5 text-teal-600" />
-                <span>Uji Alarm Lab (3s)</span>
+                <span>Uji Alarm Lab</span>
               </button>
             </div>
           </div>
@@ -1394,7 +1371,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             </div>
 
             {/* Judul Status Utama */}
-            <h2 className="rt-hero-title">
+            <h2 className="rt-hero-title mb-4">
               {!isActive
                 ? role === 'lab'
                   ? 'Sensor Standby'
@@ -1403,15 +1380,6 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                   ? 'Terdeteksi Suara Berisik'
                   : 'Suara Ruangan Kondusif'}
             </h2>
-            <p className="rt-hero-desc">
-              {!isActive
-                ? role === 'lab'
-                  ? ''
-                  : 'Sistem siap melakukan klasifikasi audio berisik vs non-berisik menggunakan model Weighted KNN.'
-                : isNoisy
-                  ? 'Intensitas dan karakteristik spektral audio melampaui profil tenang lingkungan laboratorium.'
-                  : 'Tingkat kebisingan berada dalam batas wajar lingkungan kerja dan tidak mengganggu aktivitas.'}
-            </p>
 
             {/* Multi-segment LED Bar Meter (28 Segmen) */}
             <div className="rt-bar-meter">
@@ -1542,7 +1510,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                         className={`font-semibold ${alarmEnabled ? 'text-teal-700' : 'text-slate-500'
                           }`}
                       >
-                        {alarmEnabled ? 'Aktif (3s)' : 'Dinonaktifkan Admin'}
+                        {alarmEnabled ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </div>
 
@@ -1703,7 +1671,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               <div>
                 <span className="font-bold text-xs sm:text-sm text-slate-800">
                   {alarmCooldownSeconds > 0
-                    ? `Peringatan Aktif: Beep Berbunyi (${alarmCooldownSeconds}s)`
+                    ? `Peringatan Aktif: Alarm Berbunyi (${alarmCooldownSeconds}s)`
                     : `Pemantauan Toleransi Bergerak (${selectedOption.label})`}
                 </span>
                 <span className="text-xs text-slate-500 ml-2 hidden sm:inline">
@@ -1756,7 +1724,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               ({lastAlertEvent.noisyCount} dari {lastAlertEvent.windowLen} detik terakhir berisik).
               {alarmEnabled && (
                 <span className="ml-1.5 font-bold text-rose-700">
-                  &bull; Beep berbunyi {beepDuration} detik di PC Lab.
+                  &bull; Audio peringatan diputar di PC Lab.
                 </span>
               )}
             </div>
