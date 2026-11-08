@@ -85,7 +85,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 
   // State Toleransi Kebisingan Konsisten (Rolling Window)
   const [consistencyDuration, setConsistencyDuration] = useState<number>(10);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isTopDropdownOpen, setIsTopDropdownOpen] = useState(false);
+  const [isInstrumentDropdownOpen, setIsInstrumentDropdownOpen] = useState(false);
 
   // State Evaluasi Jendela Geser (Rolling Window State)
   const [windowNoisySeconds, setWindowNoisySeconds] = useState<number>(0);
@@ -183,12 +184,17 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   const adminTelemetryRef = useRef<TelemetryPayload | null>(null);
 
   // Tutup dropdown saat klik di luar
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const topDropdownRef = useRef<HTMLDivElement | null>(null);
+  const instrumentDropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsDropdownOpen(false);
+      const target = e.target as Node;
+      if (topDropdownRef.current && !topDropdownRef.current.contains(target)) {
+        setIsTopDropdownOpen(false);
+      }
+      if (instrumentDropdownRef.current && !instrumentDropdownRef.current.contains(target)) {
+        setIsInstrumentDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
@@ -609,8 +615,10 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     // Ambil initial state via REST
     remoteSocket.fetchState().then((st) => {
       setRoomState(st);
-      if (st.tolerance_seconds) {
-        setConsistencyDuration(st.tolerance_seconds);
+      if (st.tolerance_seconds !== undefined && st.tolerance_seconds !== null) {
+        const val = Number(st.tolerance_seconds);
+        setConsistencyDuration(val);
+        consistencyDurationRef.current = val;
       }
       setAlarmEnabled(st.alarm_enabled);
       if (role === 'admin') {
@@ -625,8 +633,15 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     // Subscribe ke sinkronisasi state ruangan
     const unsubState = remoteSocket.onStateSync((st) => {
       setRoomState(st);
-      if (st.tolerance_seconds) {
-        setConsistencyDuration(st.tolerance_seconds);
+      if (st.tolerance_seconds !== undefined && st.tolerance_seconds !== null) {
+        const val = Number(st.tolerance_seconds);
+        setConsistencyDuration(val);
+        consistencyDurationRef.current = val;
+        if (rollingHistoryRef.current.length > val) {
+          rollingHistoryRef.current = rollingHistoryRef.current.slice(-val);
+          setWindowTotalSeconds(rollingHistoryRef.current.length);
+          setWindowNoisySeconds(rollingHistoryRef.current.filter(Boolean).length);
+        }
       }
       setAlarmEnabled(st.alarm_enabled);
 
@@ -723,8 +738,15 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
         } else if (cmd.action === 'STOP_MONITORING') {
           stopMonitoringInternal();
         } else if (cmd.action === 'UPDATE_CONFIG') {
-          if (cmd.params?.tolerance_seconds) {
-            setConsistencyDuration(cmd.params.tolerance_seconds);
+          if (cmd.params?.tolerance_seconds !== undefined && cmd.params?.tolerance_seconds !== null) {
+            const val = Number(cmd.params.tolerance_seconds);
+            setConsistencyDuration(val);
+            consistencyDurationRef.current = val;
+            if (rollingHistoryRef.current.length > val) {
+              rollingHistoryRef.current = rollingHistoryRef.current.slice(-val);
+              setWindowTotalSeconds(rollingHistoryRef.current.length);
+              setWindowNoisySeconds(rollingHistoryRef.current.filter(Boolean).length);
+            }
           }
           if (cmd.params?.alarm_enabled !== undefined) {
             setAlarmEnabled(cmd.params.alarm_enabled);
@@ -762,7 +784,16 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 
   const handleAdminSetTolerance = (dur: number) => {
     setConsistencyDuration(dur);
-    setIsDropdownOpen(false);
+    consistencyDurationRef.current = dur;
+    setIsTopDropdownOpen(false);
+    setIsInstrumentDropdownOpen(false);
+
+    if (rollingHistoryRef.current.length > dur) {
+      rollingHistoryRef.current = rollingHistoryRef.current.slice(-dur);
+      setWindowTotalSeconds(rollingHistoryRef.current.length);
+      setWindowNoisySeconds(rollingHistoryRef.current.filter(Boolean).length);
+    }
+
     remoteSocket.sendCommand('UPDATE_CONFIG', { tolerance_seconds: dur });
   };
 
@@ -1242,23 +1273,36 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1.5">
                 Toleransi Rolling Window
               </label>
-              <div className="relative" ref={dropdownRef}>
+              <div className="relative" ref={topDropdownRef}>
                 <button
                   type="button"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full flex items-center justify-between px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 hover:border-teal-500 transition-colors"
+                  onClick={() => setIsTopDropdownOpen(!isTopDropdownOpen)}
+                  className="w-full flex items-center justify-between px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 hover:border-teal-500 transition-colors shadow-2xs"
                 >
                   <span>{selectedOption.label}</span>
-                  <HeroIcon name="chevron-down" className="w-3.5 h-3.5 text-slate-400" />
+                  <HeroIcon name="chevron-down" className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isTopDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
-                {isDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1 space-y-0.5">
+                {isTopDropdownOpen && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1 space-y-0.5 max-h-60 overflow-y-auto"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
                     {CONSISTENCY_OPTIONS.map((opt) => (
                       <button
                         key={opt.val}
-                        onClick={() => handleAdminSetTolerance(opt.val)}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${consistencyDuration === opt.val
-                          ? 'bg-teal-50 text-teal-800'
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleAdminSetTolerance(opt.val);
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleAdminSetTolerance(opt.val);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${consistencyDuration === opt.val
+                          ? 'bg-teal-50 text-teal-800 font-bold'
                           : 'text-slate-700 hover:bg-slate-100'
                           }`}
                       >
@@ -1548,11 +1592,11 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                       <span>Toleransi Kebisingan</span>
                     </label>
 
-                    <div className="rt-custom-dropdown z-30" ref={dropdownRef}>
+                    <div className="rt-custom-dropdown z-30" ref={instrumentDropdownRef}>
                       <button
                         type="button"
-                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                        className={`rt-custom-dropdown-trigger ${isDropdownOpen ? 'open' : ''
+                        onClick={() => setIsInstrumentDropdownOpen(!isInstrumentDropdownOpen)}
+                        className={`rt-custom-dropdown-trigger ${isInstrumentDropdownOpen ? 'open' : ''
                           }`}
                       >
                         <span className="font-bold text-slate-800 text-xs">
@@ -1560,13 +1604,16 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                         </span>
                         <HeroIcon
                           name="chevron-down"
-                          className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''
+                          className={`w-4 h-4 text-slate-400 transition-transform ${isInstrumentDropdownOpen ? 'rotate-180' : ''
                             }`}
                         />
                       </button>
 
-                      {isDropdownOpen && (
-                        <div className="rt-custom-dropdown-popover max-h-60 overflow-y-auto overscroll-contain shadow-xl border border-slate-200">
+                      {isInstrumentDropdownOpen && (
+                        <div
+                          className="rt-custom-dropdown-popover max-h-60 overflow-y-auto overscroll-contain shadow-xl border border-slate-200"
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-1.5 sticky top-0 bg-white border-b border-slate-100">
                             Pilihan Toleransi
                           </div>
@@ -1579,8 +1626,17 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                               return (
                                 <div
                                   key={opt.val}
-                                  onClick={() => handleAdminSetTolerance(opt.val)}
-                                  className={`rt-dropdown-item ${isSelected ? 'selected' : ''}`}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleAdminSetTolerance(opt.val);
+                                  }}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleAdminSetTolerance(opt.val);
+                                  }}
+                                  className={`rt-dropdown-item ${isSelected ? 'selected' : ''} cursor-pointer`}
                                 >
                                   <div className="pt-0.5">
                                     <div className={`rt-dropdown-radio ${isSelected ? 'active' : ''}`}>
